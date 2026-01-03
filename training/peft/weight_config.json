@@ -1,0 +1,56 @@
+{
+  "base": {
+    "default": 5,
+    "produce_heavy": 25,
+    "produce_light": 8,
+    "meat": 18,
+    "dairy": 15
+  },
+  "unit_overrides": {
+    "bag": 8,
+    "bin": 25,
+    "tote": 25,
+    "crate": 25,
+    "box": 15,
+    "case": 18,
+    "cs": 18,
+    "pkg": 10,
+    "package": 10,
+    "flat": 12,
+    "gallon": 9,
+    "gal": 9,
+    "lb": 1,
+    "pound": 1,
+    "pounds": 1,
+    "dozen": 4,
+    "dz": 4,
+    "loaf": 0.5,
+    "bottle": 2,
+    "can": 2,
+    "jar": 2,
+    "tray": 3,
+    "clamshell": 3,
+    "bunch": 5,
+    "each": 2,
+    "pack": 2,
+    "pallet": 170
+  },
+  "item_specific": {
+    "cereal": {"box": 8, "case": 10, "package": 8},
+    "bread": {"box": 12, "case": 15, "loaf": 0.5, "flat": 12},
+    "milk": {"box": 18, "case": 20, "crate": 25, "gallon": 9},
+    "produce": {"box": 17, "case": 18, "flat": 12, "crate": 25},
+    "applesauce": {"box": 8, "case": 10, "package": 5},
+    "drinks": {"box": 15, "case": 18, "12 pack": 5, "bottle": 5, "dozen": 5},
+    "waffles": {"box": 3, "package": 2, "pack": 2},
+    "protein bar": {"box": 5, "case": 8},
+    "granola": {"box": 8, "case": 10}
+  },
+  "food_weights": {
+    "produce_heavy": ["potato", "onion", "cabbage", "carrot", "broccoli", "brocolli", "cucumber", "zucchini", "squash", "banana"],
+    "produce_light": ["lettuce", "greens", "spinach", "salad", "herb", "chard"],
+    "meat": ["chicken", "beef", "pork", "turkey", "meat", "sausage", "ribs"],
+    "dairy": ["milk", "cheese", "yogurt", "butter", "cream", "mozzarella"],
+    "seafood": ["fish", "shrimp", "salmon", "tuna", "scallop", "scallops"]
+  }
+}
