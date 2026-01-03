@@ -299,7 +299,13 @@ app.add_middleware(
   allow_headers=["*"],
 )
 
-RECORDS: List[Dict[str, Any]] = load_records()
+# Load parsed records lazily - don't fail if data file is missing (e.g., in production)
+try:
+    RECORDS: List[Dict[str, Any]] = load_records()
+except Exception as e:
+    print(f"⚠ Warning: Could not load parsed messages: {e}")
+    print(f"  Continuing with empty records (audited messages still work via Supabase)")
+    RECORDS: List[Dict[str, Any]] = []
 
 
 @app.get("/messages")
