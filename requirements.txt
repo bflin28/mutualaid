@@ -1,4 +1,12 @@
+# Core dependencies for FastAPI backend
 fastapi==0.115.6
 uvicorn[standard]==0.34.0
 supabase==2.10.0
 python-dotenv==1.0.0
+
+# Additional dependencies from training/peft/requirements.txt (needed for ML features)
+transformers==4.46.3
+datasets==3.1.0
+peft==0.13.2
+accelerate==1.1.1
+numpy>=1.26.4
