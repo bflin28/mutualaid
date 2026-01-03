@@ -1,0 +1,97 @@
+{
+  "Aldi Wicker Park": [
+    "aldi wp",
+    "wp aldi",
+    "aldi wicker park",
+    "wicker park aldi",
+    "aldi n milwaukee",
+    "aldi n milwaukee ave",
+    "aldis wp",
+    "aldis wicker park"
+  ],
+  "Aldi Hodgkins": ["aldi hodgkins"],
+  "Aldi Lyons": ["aldi lyons"],
+  "Aldi Cicero": ["aldi cicero"],
+  "Aldi Englewood": ["aldi englewood"],
+  "Aldi Belmont": ["aldi belmont", "belmont aldi"],
+  "Aldi Kostner": ["aldi kostner", "kostner aldi"],
+  "Carmen/San Lucas/Whole Foods": ["Carmen/San Lucas/Whole Foods"],
+  "Love Fridge": [
+    "love fridge",
+    "love fridges",
+    "love fridge took",
+    "la michoacana"
+  ],
+  "NA4J": ["na4j"],
+  "UC": ["uc", "urban canopy"],
+  "LSRSN": ["lsrsn", "ls rsn"],
+  "Mariano's": ["marianos", "mariano's"],
+  "Mariano's South Loop": [
+    "sl mariano's",
+    "marianos sl",
+    "mariano's sl",
+    "marianos south loop",
+    "south loop marianos",
+    "south loop mariano's",
+    "sl marianos"
+  ],
+  "PSN": ["psn", "pilsen solidarity network"],
+  "BKMA": ["bkma", "back of the yards"],
+  "WSMA": ["wsma", "west side mutual aid"],
+  "SWC": ["swc", "swc took"],
+  "IPCFP": ["ipcfp", "industrial park community food pantry"],
+  "Marillac": ["marillac"],
+  "Pilsen Food Pantry": [
+    "pilsen food pantry",
+    "pilsen pantry",
+    "pfp"
+  ],
+  "Pilsen Shelter": ["pilsen shelter"],
+  "Avondale": [
+    "avondale",
+    "avondale took",
+    "avondale/nssn",
+    "avondale nssn"
+  ],
+  "Edgewater Mutual Aid": [
+    "edgewater mutual aid",
+    "edgewater mutual aid network",
+    "edgewater mutual aid took"
+  ],
+  "Port Ministries": [
+    "port ministries",
+    "port &",
+    "port and"
+  ],
+  "BYP": ["byp"],
+  "Sweet Water Foundation": [
+    "sweet water foundation",
+    "sweet water",
+    "sweetwater"
+  ],
+  "Local Foods": ["local foods"],
+  "Whole Foods": [
+    "whole foods",
+    "englewood whole foods",
+    "wf"
+  ],
+  "Trader Joe's": [
+    "trader joes",
+    "trader joe's",
+    "trader joe",
+    "tj's"
+  ],
+  "Sysco": ["sysco"],
+  "Cold Chain": ["cold chain"],
+  "New Hope": ["new hope"],
+  "Just Roots": ["just roots"],
+  "Costco": ["costco"],
+  "Jewel": ["jewel", "jewel osco"],
+  "Target": ["target"],
+  "Fresh Thyme": ["fresh thyme"],
+  "Pete's": [
+    "petes",
+    "pete's",
+    "pete's fresh market"
+  ]
+}

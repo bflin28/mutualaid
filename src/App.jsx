@@ -5,7 +5,7 @@ import { fetchWarehouseLogs, previewWarehouseLog, saveWarehouseLog, updateWareho
 import { fetchSlackMessage, searchSlackMessages, fetchSlackMessageById } from './lib/slackBrowserApi'
 import { auditSlackRecord } from './lib/slackAuditApi'
 import { runInference, compareExtractions, getTrainingStats } from './lib/modelInferenceApi'
-import locationAliases from '../training/peft/data/location_aliases.json'
+import locationAliases from './data/location_aliases.json'
 
 const LOCATION_OPTIONS = Object.keys(locationAliases || {}).sort((a, b) => a.localeCompare(b))
 const WAREHOUSE_SUBCATEGORY_OPTIONS = ['produce', 'grain', 'meat', 'drinks', 'snacks', 'dry goods', 'dairy']
