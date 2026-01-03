@@ -12,6 +12,7 @@ If the parsed JSONL is missing, it will call extract_slack_regex.py to generate 
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import subprocess
 import sys
@@ -19,13 +20,40 @@ from typing import List, Dict, Any
 
 from fastapi import FastAPI, Query, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from dotenv import load_dotenv
+from supabase import create_client, Client
 
+# Load environment variables from .env.local or .env
+env_local = pathlib.Path(__file__).resolve().parent.parent.parent / ".env.local"
+if env_local.exists():
+    load_dotenv(env_local)
+else:
+    load_dotenv()
 
 BASE = pathlib.Path(__file__).resolve().parent
 DATA_PATH = BASE / "data" / "slack_messages_parsed.jsonl"
 AUDIT_PATH = BASE / "data" / "slack_messages_audited.jsonl"
 ALIASES_PATH = BASE / "data" / "location_aliases.json"
 EXTRACT_SCRIPT = BASE / "extract_slack_regex.py"
+
+# Supabase configuration
+SUPABASE_URL = os.getenv("SUPABASE_URL")
+SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_ROLE_KEY")
+USE_SUPABASE = bool(SUPABASE_URL and SUPABASE_KEY)
+
+# Initialize Supabase client if configured
+supabase: Client | None = None
+if USE_SUPABASE:
+    try:
+        supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+        print(f"✓ Connected to Supabase (using database for audited messages)")
+    except Exception as e:
+        print(f"⚠ Failed to connect to Supabase: {e}")
+        print(f"  Falling back to JSONL file storage")
+        USE_SUPABASE = False
+else:
+    print(f"⚠ Supabase not configured - using JSONL file storage")
+    print(f"  Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to enable database storage")
 
 
 def ensure_parsed_file() -> pathlib.Path:
@@ -187,6 +215,17 @@ def load_records() -> List[Dict[str, Any]]:
 
 
 def load_audited() -> List[Dict[str, Any]]:
+  """Load audited records from Supabase or fallback to JSONL file."""
+  if USE_SUPABASE and supabase:
+    try:
+      response = supabase.table("slack_messages_audited").select("*").execute()
+      # Extract data from JSONB column
+      return [row["data"] for row in response.data]
+    except Exception as e:
+      print(f"Error loading from Supabase: {e}")
+      print(f"Falling back to JSONL file")
+
+  # Fallback to JSONL
   ensure_audit_dir()
   if not AUDIT_PATH.exists():
     return []
@@ -201,10 +240,26 @@ def load_audited() -> List[Dict[str, Any]]:
 
 
 def save_audited_record(rec: Dict[str, Any]) -> None:
+  """Save audited record to Supabase or fallback to JSONL file."""
+  rec = {**rec, "audited": True}
+  rec_id = str(rec.get("id"))
+
+  if USE_SUPABASE and supabase:
+    try:
+      # Upsert: insert or update if exists
+      supabase.table("slack_messages_audited").upsert({
+        "id": rec_id,
+        "data": rec
+      }).execute()
+      return
+    except Exception as e:
+      print(f"Error saving to Supabase: {e}")
+      print(f"Falling back to JSONL file")
+
+  # Fallback to JSONL
   ensure_audit_dir()
   records = load_audited()
   existing_ids = {r.get("id"): idx for idx, r in enumerate(records)}
-  rec = {**rec, "audited": True}
   if rec.get("id") in existing_ids:
     records[existing_ids[rec["id"]]] = rec
   else:
@@ -215,6 +270,18 @@ def save_audited_record(rec: Dict[str, Any]) -> None:
 
 
 def delete_audited_record(rec_id: Any) -> None:
+  """Delete audited record from Supabase or fallback to JSONL file."""
+  rec_id_str = str(rec_id)
+
+  if USE_SUPABASE and supabase:
+    try:
+      supabase.table("slack_messages_audited").delete().eq("id", rec_id_str).execute()
+      return
+    except Exception as e:
+      print(f"Error deleting from Supabase: {e}")
+      print(f"Falling back to JSONL file")
+
+  # Fallback to JSONL
   ensure_audit_dir()
   records = load_audited()
   records = [r for r in records if r.get("id") != rec_id]

@@ -8,3 +8,5 @@ accelerate==1.1.1
 # Optional for 4-bit/8-bit on Linux GPU; skipped on macOS where wheels are unavailable.
 bitsandbytes==0.42.0; platform_system != "Darwin"
 numpy>=1.26.4
+supabase==2.10.0
+python-dotenv==1.0.0
