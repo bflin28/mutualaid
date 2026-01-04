@@ -9,7 +9,39 @@ import locationAliases from './data/location_aliases.json'
 import itemSuggestions from './data/item_suggestions.json'
 
 const LOCATION_OPTIONS = Object.keys(locationAliases || {}).sort((a, b) => a.localeCompare(b))
-const ITEM_SUGGESTIONS = itemSuggestions || []
+
+// Normalize item suggestions to dedupe variations like "apple", "apples", "box of apples"
+const normalizeItemName = (name) => {
+  let normalized = name.toLowerCase().trim()
+  // Remove common prefixes (container/quantity descriptors)
+  // Handles: "box of X", "cs X", "case X", "bag X", "crate X", etc.
+  normalized = normalized
+    .replace(/^(box(es)?|cs|case(s)?|bag(s)?|crate(s)?|flat(s)?|pallet(s)?|asst\.?|assorted)(\s+of)?\s+/i, '')
+    .trim()
+  // Pluralize common singular forms
+  if (/^(apple|banana|orange|potato|tomato|carrot|onion|pepper|cucumber|avocado|mango|lemon|lime|peach|plum|pear|grape|berry|strawberry|blueberry|cherry|egg)$/i.test(normalized)) {
+    normalized = normalized + 's'
+  }
+  // Title case
+  return normalized.split(' ').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ')
+}
+
+// Filter out non-food items (locations, actions, etc.)
+const NON_FOOD_PATTERNS = /took$|^aldi|^mariano|^local foods|^na4j|^lsrsn|^uc$|mutual aid|bonus drop|aprx/i
+
+const ITEM_SUGGESTIONS = (() => {
+  const seen = new Set()
+  const result = []
+  for (const item of (itemSuggestions || [])) {
+    if (NON_FOOD_PATTERNS.test(item)) continue
+    const normalized = normalizeItemName(item)
+    if (!seen.has(normalized.toLowerCase())) {
+      seen.add(normalized.toLowerCase())
+      result.push(normalized)
+    }
+  }
+  return result.sort((a, b) => a.localeCompare(b))
+})()
 const WAREHOUSE_SUBCATEGORY_OPTIONS = ['produce', 'grain', 'meat', 'drinks', 'snacks', 'dry goods', 'dairy']
 const UNIT_OPTIONS = [
   'cases',
