@@ -242,6 +242,23 @@ def load_audited() -> List[Dict[str, Any]]:
 def save_audited_record(rec: Dict[str, Any]) -> None:
   """Save audited record to Supabase or fallback to JSONL file."""
   rec = {**rec, "audited": True}
+
+  # Add estimated weights to items in sections
+  if rec.get('sections'):
+    for section in rec['sections']:
+      if section.get('items'):
+        section['items'] = add_estimated_weights(section['items'])
+
+  # Recalculate total_estimated_lbs
+  total_lbs = 0
+  if rec.get('sections'):
+    for section in rec['sections']:
+      for item in section.get('items', []):
+        if item.get('estimated_lbs'):
+          total_lbs += float(item['estimated_lbs'])
+
+  rec['total_estimated_lbs'] = round(total_lbs, 1) if total_lbs > 0 else None
+
   rec_id = str(rec.get("id"))
 
   if USE_SUPABASE and supabase:
@@ -552,6 +569,101 @@ def reload_data():
   RECORDS = load_records()
   return {"total": len(RECORDS)}
 
+
+def estimate_item_weight(item: Dict[str, Any]) -> float | None:
+    """Estimate weight in pounds for an item based on quantity, unit, and item name"""
+    if not item:
+        return None
+
+    name = str(item.get('name', '')).lower().strip()
+    quantity = item.get('quantity')
+    unit = str(item.get('unit', '')).lower().strip()
+    subcategory = str(item.get('subcategory', '')).lower().strip()
+
+    # If already has estimated_lbs, use it
+    if item.get('estimated_lbs') is not None:
+        return float(item['estimated_lbs'])
+
+    # If no quantity, can't estimate
+    try:
+        qty = float(quantity) if quantity else 0
+    except (ValueError, TypeError):
+        return None
+
+    if qty <= 0:
+        return None
+
+    # Direct weight units
+    if unit in ['lb', 'lbs', 'pound', 'pounds']:
+        return qty
+
+    # Pallet weights
+    if 'pallet' in unit:
+        if 'full' in unit:
+            return qty * 800  # Full pallet
+        elif 'small' in unit:
+            return qty * 250  # Small/partial pallet
+        else:
+            return qty * 500  # Generic pallet (middle estimate)
+
+    # Case/box weights (estimated by category/item)
+    if unit in ['case', 'cases', 'box', 'boxes']:
+        # Item-specific case weights
+        if 'produce' in name or 'fruit' in name or 'vegetable' in name or subcategory == 'produce':
+            return qty * 30
+        if 'meat' in name or 'chicken' in name or 'beef' in name or subcategory == 'meat':
+            return qty * 40
+        if 'dairy' in name or subcategory == 'dairy':
+            return qty * 35
+        if 'bread' in name or 'baked' in name:
+            return qty * 20
+        # Default case weight
+        return qty * 25
+
+    # Bag weights
+    if unit in ['bag', 'bags']:
+        return qty * 5
+
+    # Item-specific weights (per unit/item)
+    item_weights = {
+        'apple': 0.33, 'banana': 0.25, 'orange': 0.3,
+        'potato': 0.5, 'onion': 0.3, 'carrot': 0.1,
+        'broccoli': 1.5, 'cauliflower': 2, 'lettuce': 1,
+        'milk': 8.6, 'bread': 1.5, 'chicken': 3,
+        'beef': 3, 'pork': 3, 'eggs': 1.5
+    }
+
+    for item_key, weight in item_weights.items():
+        if item_key in name:
+            return qty * weight
+
+    # Fallback by subcategory
+    if not unit or unit in ['item', 'items', 'unit', 'units']:
+        if subcategory == 'produce':
+            return qty * 1
+        if subcategory == 'meat':
+            return qty * 2
+        if subcategory == 'dairy':
+            return qty * 2
+        if subcategory in ['bread', 'grain']:
+            return qty * 1.5
+
+    return None
+
+def add_estimated_weights(items: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Add estimated_lbs to items that don't have it"""
+    if not items:
+        return items
+
+    result = []
+    for item in items:
+        item_copy = dict(item)
+        if item_copy.get('estimated_lbs') is None:
+            weight = estimate_item_weight(item_copy)
+            if weight is not None:
+                item_copy['estimated_lbs'] = round(weight, 1)
+        result.append(item_copy)
+    return result
 
 @app.post("/audit")
 def audit_record(rec: Dict[str, Any]):

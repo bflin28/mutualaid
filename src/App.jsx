@@ -6,9 +6,93 @@ import { fetchSlackMessage, searchSlackMessages, fetchSlackMessageById } from '.
 import { auditSlackRecord } from './lib/slackAuditApi'
 import { runInference, compareExtractions, getTrainingStats } from './lib/modelInferenceApi'
 import locationAliases from './data/location_aliases.json'
+import itemSuggestions from './data/item_suggestions.json'
 
 const LOCATION_OPTIONS = Object.keys(locationAliases || {}).sort((a, b) => a.localeCompare(b))
+const ITEM_SUGGESTIONS = itemSuggestions || []
 const WAREHOUSE_SUBCATEGORY_OPTIONS = ['produce', 'grain', 'meat', 'drinks', 'snacks', 'dry goods', 'dairy']
+const UNIT_OPTIONS = [
+  'cases',
+  'boxes',
+  'bags',
+  'lbs',
+  'pallets (full)',
+  'pallets (small)',
+  'crates',
+  'flats',
+  'items',
+  'dozen',
+  'each',
+  'gallons',
+  'packages',
+  'sacks',
+]
+
+// Item name to category mapping for auto-population
+const ITEM_CATEGORY_MAP = {
+  // Produce
+  'apple': 'produce', 'apples': 'produce', 'banana': 'produce', 'bananas': 'produce',
+  'orange': 'produce', 'oranges': 'produce', 'potato': 'produce', 'potatoes': 'produce',
+  'sweet potato': 'produce', 'sweet potatoes': 'produce', 'onion': 'produce', 'onions': 'produce',
+  'carrot': 'produce', 'carrots': 'produce', 'broccoli': 'produce', 'cauliflower': 'produce',
+  'lettuce': 'produce', 'cabbage': 'produce', 'tomato': 'produce', 'tomatoes': 'produce',
+  'cucumber': 'produce', 'cucumbers': 'produce', 'pepper': 'produce', 'peppers': 'produce',
+  'zucchini': 'produce', 'squash': 'produce', 'grape': 'produce', 'grapes': 'produce',
+  'strawberry': 'produce', 'strawberries': 'produce', 'berry': 'produce', 'berries': 'produce',
+  'melon': 'produce', 'watermelon': 'produce', 'cantaloupe': 'produce', 'spinach': 'produce',
+  'kale': 'produce', 'arugula': 'produce', 'celery': 'produce', 'green': 'produce', 'greens': 'produce',
+  'salad': 'produce', 'vegetable': 'produce', 'vegetables': 'produce', 'fruit': 'produce', 'fruits': 'produce',
+
+  // Dairy
+  'milk': 'dairy', 'yogurt': 'dairy', 'cheese': 'dairy', 'butter': 'dairy',
+  'cream': 'dairy', 'sour cream': 'dairy', 'ice cream': 'dairy',
+
+  // Meat
+  'chicken': 'meat', 'beef': 'meat', 'pork': 'meat', 'turkey': 'meat',
+  'sausage': 'meat', 'bacon': 'meat', 'ham': 'meat', 'fish': 'meat',
+  'salmon': 'meat', 'tuna': 'meat', 'meat': 'meat',
+
+  // Grain/Bread
+  'bread': 'grain', 'bagel': 'grain', 'bagels': 'grain', 'bun': 'grain', 'buns': 'grain',
+  'roll': 'grain', 'rolls': 'grain', 'tortilla': 'grain', 'tortillas': 'grain',
+  'pasta': 'grain', 'rice': 'grain', 'cereal': 'grain', 'oat': 'grain', 'oats': 'grain',
+  'grain': 'grain', 'wheat': 'grain', 'flour': 'grain',
+
+  // Snacks
+  'chip': 'snacks', 'chips': 'snacks', 'cookie': 'snacks', 'cookies': 'snacks',
+  'cracker': 'snacks', 'crackers': 'snacks', 'popcorn': 'snacks', 'candy': 'snacks',
+  'chocolate': 'snacks', 'snack': 'snacks', 'snacks': 'snacks',
+
+  // Drinks
+  'juice': 'drinks', 'soda': 'drinks', 'water': 'drinks', 'coffee': 'drinks',
+  'tea': 'drinks', 'drink': 'drinks', 'drinks': 'drinks', 'beverage': 'drinks',
+
+  // Dry goods
+  'can': 'dry goods', 'canned': 'dry goods', 'bean': 'dry goods', 'beans': 'dry goods',
+  'soup': 'dry goods', 'sauce': 'dry goods', 'oil': 'dry goods', 'condiment': 'dry goods',
+  'spice': 'dry goods', 'spices': 'dry goods', 'salt': 'dry goods',
+  'sugar': 'dry goods', 'honey': 'dry goods',
+}
+
+const getCategoryFromItemName = (itemName) => {
+  const normalized = String(itemName || '').toLowerCase().trim()
+  if (!normalized) return ''
+
+  // Check for exact match first
+  if (ITEM_CATEGORY_MAP[normalized]) {
+    return ITEM_CATEGORY_MAP[normalized]
+  }
+
+  // Check if item name contains any keyword
+  for (const [keyword, category] of Object.entries(ITEM_CATEGORY_MAP)) {
+    if (normalized.includes(keyword)) {
+      return category
+    }
+  }
+
+  return ''
+}
+
 const formatSubcategoryLabel = (value) => value.split(' ').map((part) => `${part.charAt(0).toUpperCase()}${part.slice(1)}`).join(' ')
 const normalizeSubcategory = (value = '') => {
   const lower = String(value || '').trim().toLowerCase()
@@ -206,7 +290,7 @@ const getRecordRawText = (record) => {
 }
 
 function App() {
-  const [currentView, setCurrentView] = useState('deliveries')
+  const [currentView, setCurrentView] = useState('logging')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [selectedPickup, setSelectedPickup] = useState(null)
   const [events, setEvents] = useState([])
@@ -335,6 +419,20 @@ function App() {
     }],
   })
   const [recurringFormStatus, setRecurringFormStatus] = useState({ state: 'idle', message: '' })
+  const [loggingFormData, setLoggingFormData] = useState({
+    location: '',
+    date: todayDateString(),
+    items: [{
+      name: '',
+      quantity: '',
+      unit: '',
+      subcategory: '',
+      estimated_lbs: '',
+    }],
+    photos: [],
+  })
+  const [loggingFormStatus, setLoggingFormStatus] = useState({ state: 'idle', message: '' })
+  const [expandedItemIndex, setExpandedItemIndex] = useState(0) // Track which item is expanded for editing
   const sortedAuditedRecords = useMemo(() => {
     const records = Array.isArray(auditedStats.records) ? [...auditedStats.records] : []
     records.sort((a, b) => {
@@ -1010,6 +1108,166 @@ function App() {
     }, 1000)
   }
 
+// Logging form handler functions to be inserted into App.jsx
+
+  const updateLoggingFormItem = (index, field, value) => {
+    setLoggingFormData(prev => ({
+      ...prev,
+      items: prev.items.map((item, idx) => {
+        if (idx !== index) return item
+
+        const updated = { ...item, [field]: value }
+
+        // Auto-populate category when item name changes
+        if (field === 'name' && value && !item.subcategory) {
+          const category = getCategoryFromItemName(value)
+          if (category) {
+            updated.subcategory = category
+          }
+        }
+
+        return updated
+      })
+    }))
+  }
+
+  const addLoggingFormItem = () => {
+    setLoggingFormData(prev => {
+      const newItems = [...prev.items, {
+        name: '',
+        quantity: '',
+        unit: '',
+        subcategory: '',
+        estimated_lbs: '',
+      }]
+      setExpandedItemIndex(newItems.length - 1) // Expand the new item
+      return {
+        ...prev,
+        items: newItems
+      }
+    })
+  }
+
+  const removeLoggingFormItem = (index) => {
+    setLoggingFormData(prev => ({
+      ...prev,
+      items: prev.items.filter((_, idx) => idx !== index)
+    }))
+  }
+
+  const handleLoggingPhotosChange = async (files) => {
+    if (!files || files.length === 0) return
+
+    const photoUrls = []
+    for (const file of Array.from(files)) {
+      const reader = new FileReader()
+      const dataUrl = await new Promise((resolve) => {
+        reader.onload = (e) => resolve(e.target.result)
+        reader.readAsDataURL(file)
+      })
+      photoUrls.push(dataUrl)
+    }
+
+    setLoggingFormData(prev => ({
+      ...prev,
+      photos: [...prev.photos, ...photoUrls]
+    }))
+  }
+
+  const removeLoggingPhoto = (index) => {
+    setLoggingFormData(prev => ({
+      ...prev,
+      photos: prev.photos.filter((_, idx) => idx !== index)
+    }))
+  }
+
+  const handleLoggingSave = async () => {
+    setLoggingFormStatus({ state: 'saving', message: '' })
+
+    const items = loggingFormData.items
+      .filter(item => item.name.trim())
+      .map(item => ({
+        name: item.name,
+        quantity: item.quantity === '' ? null : Number(item.quantity),
+        unit: item.unit || null,
+        subcategory: item.subcategory || null,
+        // Backend will estimate pounds based on quantity + unit + item
+      }))
+
+    if (items.length === 0) {
+      setLoggingFormStatus({ state: 'error', message: 'Please add at least one item.' })
+      return
+    }
+
+    if (!loggingFormData.location.trim()) {
+      setLoggingFormStatus({ state: 'error', message: 'Please enter a location.' })
+      return
+    }
+
+    // Backend will calculate total_estimated_lbs based on item conversions
+    const total_estimated_lbs = null
+
+    const now = new Date().toISOString()
+    const locationKey = normalizeLocationKey(loggingFormData.location)
+    const id = `rescue-log-${locationKey}-${Date.now()}`
+
+    const payload = {
+      id,
+      recurring: false,
+      rescue_location_canonical: loggingFormData.location,
+      rescue_location: loggingFormData.location,
+      rescue_date: loggingFormData.date,
+      sections: [{
+        location: loggingFormData.location,
+        location_canonical: loggingFormData.location,
+        items,
+      }],
+      items: [],
+      total_estimated_lbs,
+      audited: true,
+      created_at: loggingFormData.date + 'T12:00:00Z',
+      updated_at: now,
+      user: '',
+      start_ts: '',
+      end_ts: '',
+      direction: 'inbound',
+      drop_off_location: '',
+      drop_off_location_canonical: '',
+      raw_messages: [`Manual rescue log - ${loggingFormData.location} - ${loggingFormData.date}`],
+      photo_urls: loggingFormData.photos,
+    }
+
+    const { error } = await auditSlackRecord(payload)
+
+    if (error) {
+      setLoggingFormStatus({ state: 'error', message: error.message || 'Failed to save rescue log.' })
+      return
+    }
+
+    setLoggingFormStatus({ state: 'saved', message: 'Saved!' })
+
+    // Reset form after successful save
+    setTimeout(() => {
+      setLoggingFormData({
+        location: '',
+        date: todayDateString(),
+        items: [{
+          name: '',
+          quantity: '',
+          unit: '',
+          subcategory: '',
+          estimated_lbs: '',
+        }],
+        photos: [],
+      })
+      setExpandedItemIndex(0) // Reset to first item
+      setLoggingFormStatus({ state: 'idle', message: '' })
+
+      // Trigger stats refresh
+      const btn = document.getElementById('audited-refresh-btn')
+      if (btn && !btn.disabled) btn.click()
+    }, 1500)
+  }
   const handleEditRecurringEvent = (event) => {
     const items = event.sections?.[0]?.items || []
     setRecurringFormData({
@@ -1239,8 +1497,8 @@ function App() {
     loadEvents()
   }, [])
 
-  const showDeliveries = () => {
-    setCurrentView('deliveries')
+  const showLogging = () => {
+    setCurrentView('logging')
     setSelectedPickup(null)
     setSignupStatus({ state: 'idle', message: '' })
   }
@@ -1835,129 +2093,232 @@ function App() {
 
   return (
     <div className="app">
-      <header className="header pickup-hero">
-        <div className="header-top">
-          <div className="title-block">
-            <p className="eyebrow">Mutual Aid · Food Rescue</p>
-            <h1>Food Pickup Hub</h1>
-            <p className="subtitle">
-              Cover a pickup, see what&apos;s urgent, and get the instructions you need for drop-off.
-            </p>
+      <header className="header modern-header">
+        <div className="header-content">
+          <div className="header-branding">
+            <div className="brand-icon">🥬</div>
+            <div className="brand-text">
+              <h1>Chicago Food Sovereignty Coalition</h1>
+            </div>
           </div>
-        </div>
-        <div className="view-tabs">
-          <button
-            className={`view-tab ${currentView === 'deliveries' ? 'active' : ''}`}
-            type="button"
-            onClick={showDeliveries}
-          >
-            Deliveries
-          </button>
-          <button
-            className={`view-tab ${currentView === 'food-pickup' ? 'active' : ''}`}
-            type="button"
-            onClick={showPickupHub}
-          >
-            Pickup schedule
-          </button>
-          <button
-            className={`view-tab ${currentView === 'slack-browser' ? 'active' : ''}`}
-            type="button"
-            onClick={showSlackBrowser}
-          >
-            Slack browser
-          </button>
-          <button
-            className={`view-tab ${currentView === 'audited-stats' ? 'active' : ''}`}
-            type="button"
-            onClick={showAuditedTab}
-          >
-            Audited stats
-          </button>
+          <div className="header-tabs">
+            <button
+              className={`header-tab ${currentView === 'logging' ? 'active' : ''}`}
+              type="button"
+              onClick={showLogging}
+            >
+              <span className="tab-icon">📝</span>
+              <span className="tab-label">Log Rescue</span>
+            </button>
+            <button
+              className={`header-tab ${currentView === 'audited-stats' ? 'active' : ''}`}
+              type="button"
+              onClick={showAuditedTab}
+            >
+              <span className="tab-icon">📊</span>
+              <span className="tab-label">View Stats</span>
+            </button>
+          </div>
         </div>
       </header>
 
       <main className="main-content">
-        {currentView === 'deliveries' && (
-          <div className="deliveries">
-            <div className="deliveries-header">
-              <div>
-                <h2>Warehouse Deliveries</h2>
-                <p>Paste Slack messages, let the LLM structure them, edit anything, and approve to append to the log below.</p>
+        {currentView === 'logging' && (
+          <div className="logging">
+            <div className="logging-form card">
+              <div className="form-row">
+                <label className="full-width">
+                  <span>Location</span>
+                  <input
+                    type="text"
+                    value={loggingFormData.location}
+                    onChange={(e) => setLoggingFormData(prev => ({ ...prev, location: e.target.value }))}
+                    placeholder="Store name or address"
+                    list="location-suggestions"
+                  />
+                  <datalist id="location-suggestions">
+                    {LOCATION_OPTIONS.map((location) => (
+                      <option key={location} value={location} />
+                    ))}
+                  </datalist>
+                </label>
               </div>
-              <div className="deliveries-actions">
-                <button
-                  className="schedule-action secondary"
-                  type="button"
-                  onClick={loadDeliveries}
-                  disabled={deliveriesLoading}
-                >
-                  {deliveriesLoading ? 'Refreshing…' : 'Reload'}
-                </button>
-                <button
-                  className="schedule-action"
-                  type="button"
-                  onClick={showPickupHub}
-                >
-                  Go to pickups
-                </button>
-              </div>
-            </div>
 
-            <div className="warehouse-intake card">
-              <div className="intake-top">
-                <div>
-                  <p className="eyebrow">Manual intake</p>
-                  <h3>Paste a Slack message</h3>
-                  <p>Send it to the LLM, review the parsed fields, tweak items, and approve.</p>
+              <div className="form-row">
+                <label className="full-width">
+                  <span>Date</span>
+                  <input
+                    type="date"
+                    value={loggingFormData.date}
+                    onChange={(e) => setLoggingFormData(prev => ({ ...prev, date: e.target.value }))}
+                  />
+                </label>
+              </div>
+
+              <div className="form-row" style={{ marginTop: '1.5rem' }}>
+                <label className="full-width">
+                  <span className="items-header-label">Items</span>
+                </label>
+                <div className="logging-items-container">
+                  {loggingFormData.items.map((item, idx) => {
+                    // Only show suggestions if user has typed at least 2 characters
+                    const showSuggestions = item.name && item.name.length >= 2
+                    const filteredSuggestions = showSuggestions
+                      ? ITEM_SUGGESTIONS.filter(suggestion =>
+                          suggestion.toLowerCase().includes(item.name.toLowerCase())
+                        )
+                      : []
+
+                    // Check if item is filled out (has at least name and quantity)
+                    const isItemFilled = item.name && item.quantity
+                    const isExpanded = expandedItemIndex === idx
+
+                    // Compact view for filled items that aren't expanded
+                    if (isItemFilled && !isExpanded) {
+                      return (
+                        <div className="logging-item-compact" key={idx}>
+                          <div className="logging-item-compact-content" onClick={() => setExpandedItemIndex(idx)}>
+                            <div className="logging-item-compact-main">
+                              <span className="logging-item-compact-name">{item.name}</span>
+                              <span className="logging-item-compact-details">
+                                {item.quantity} {item.unit || 'items'}
+                                {item.subcategory && ` • ${formatSubcategoryLabel(item.subcategory)}`}
+                              </span>
+                            </div>
+                            <button
+                              type="button"
+                              className="logging-item-compact-edit"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setExpandedItemIndex(idx)
+                              }}
+                              aria-label="Edit item"
+                            >
+                              Edit
+                            </button>
+                          </div>
+                          {loggingFormData.items.length > 1 && (
+                            <button
+                              type="button"
+                              className="logging-item-compact-remove"
+                              onClick={() => removeLoggingFormItem(idx)}
+                              aria-label="Remove item"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+                      )
+                    }
+
+                    // Full view for empty items or expanded items
+                    return (
+                      <div className="logging-item-card" key={idx}>
+                        <div className="logging-item-header">
+                          <span className="logging-item-number">Item {idx + 1}</span>
+                          {loggingFormData.items.length > 1 && (
+                            <button
+                              type="button"
+                              className="logging-item-remove"
+                              onClick={() => removeLoggingFormItem(idx)}
+                              aria-label="Remove item"
+                            >
+                              ✕
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="logging-item-field">
+                          <label>Item</label>
+                          <input
+                            type="text"
+                            value={item.name}
+                            onChange={(e) => updateLoggingFormItem(idx, 'name', e.target.value)}
+                            placeholder="Type to search..."
+                            list={showSuggestions ? `item-suggestions-${idx}` : undefined}
+                          />
+                          {showSuggestions && (
+                            <datalist id={`item-suggestions-${idx}`}>
+                              {filteredSuggestions.map((suggestion) => (
+                                <option key={suggestion} value={suggestion} />
+                              ))}
+                            </datalist>
+                          )}
+                        </div>
+
+                        <div className="logging-item-row">
+                          <div className="logging-item-field">
+                            <label>Qty</label>
+                            <input
+                              type="text"
+                              inputMode="decimal"
+                              value={item.quantity}
+                              onChange={(e) => updateLoggingFormItem(idx, 'quantity', e.target.value)}
+                              placeholder="5"
+                            />
+                          </div>
+
+                          <div className="logging-item-field">
+                            <label>Unit</label>
+                            <select
+                              value={item.unit || ''}
+                              onChange={(e) => updateLoggingFormItem(idx, 'unit', e.target.value)}
+                            >
+                              <option value="">--</option>
+                              {UNIT_OPTIONS.map((unit) => (
+                                <option key={unit} value={unit}>{unit}</option>
+                              ))}
+                            </select>
+                          </div>
+                        </div>
+
+                        <div className="logging-item-field">
+                          <label>Category</label>
+                          <select
+                            value={item.subcategory || ''}
+                            onChange={(e) => updateLoggingFormItem(idx, 'subcategory', e.target.value)}
+                          >
+                            <option value="">--</option>
+                            {WAREHOUSE_SUBCATEGORY_OPTIONS.map((option) => (
+                              <option key={option} value={option}>{formatSubcategoryLabel(option)}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )
+                  })}
                 </div>
-                <div className="intake-status">
-                  {warehousePreviewStatus === 'loading' && <span className="status-pill outline">Parsing…</span>}
-                  {warehousePreviewStatus === 'ready' && warehouseDraft && <span className="status-pill filled">Draft ready</span>}
-                </div>
-                <div className="item-actions">
+                <div style={{ marginTop: '1rem' }}>
                   <button
-                    className="schedule-action"
                     type="button"
-                    onClick={handleAudit}
-                    disabled={slackAuditStatus.state === 'saving' || !slackRecord}
+                    className="logging-add-item-btn"
+                    onClick={addLoggingFormItem}
                   >
-                    {slackAuditStatus.state === 'saving' ? 'Saving…' : 'Mark audited'}
+                    + Add item
                   </button>
-                  {slackAuditStatus.state === 'saved' && <span className="status-pill filled">Audited</span>}
-                  {slackAuditStatus.state === 'error' && <span className="status-pill danger">Audit error</span>}
                 </div>
               </div>
 
-              <label className="intake-label" htmlFor="warehouse-message">Slack message text</label>
-              <textarea
-                id="warehouse-message"
-                className="intake-textarea"
-                placeholder="Paste the Slack message text (checklist bullets are great)…"
-                value={warehouseInput}
-                onChange={(e) => handleWarehouseInputChange(e.target.value)}
-                onPaste={handleWarehousePaste}
-              />
-              <div className="intake-upload">
-                <label className="intake-label" htmlFor="warehouse-images">Optional photos (improves weight guesses)</label>
-                <input
-                  id="warehouse-images"
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  onChange={(e) => handleWarehouseImagesChange(e.target.files)}
-                />
-                <p className="intake-hint">Tip: you can also paste images directly into the message box.</p>
-                {warehouseImages.length > 0 && (
-                  <div className="image-previews">
-                    {warehouseImages.map((url, idx) => (
-                      <div className="image-preview" key={`${url}-${idx}`}>
-                        <img src={url} alt={`Upload ${idx + 1}`} />
+              <div className="form-row" style={{ marginTop: '1.5rem' }}>
+                <label className="full-width">
+                  <span>Photos</span>
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    onChange={(e) => handleLoggingPhotosChange(e.target.files)}
+                  />
+                </label>
+                {loggingFormData.photos.length > 0 && (
+                  <div className="image-previews" style={{ marginTop: '0.5rem' }}>
+                    {loggingFormData.photos.map((url, idx) => (
+                      <div className="image-preview" key={`photo-${idx}`}>
+                        <img src={url} alt={`Photo ${idx + 1}`} />
                         <button
                           type="button"
                           className="image-remove"
-                          onClick={() => removeWarehouseImage(idx)}
-                          aria-label="Remove image"
+                          onClick={() => removeLoggingPhoto(idx)}
+                          aria-label="Remove photo"
                         >
                           ×
                         </button>
@@ -1966,315 +2327,26 @@ function App() {
                   </div>
                 )}
               </div>
-              <div className="intake-actions">
-                <button
-                  className="schedule-action"
-                  type="button"
-                  onClick={handleWarehousePreview}
-                  disabled={warehousePreviewStatus === 'loading'}
-                >
-                  {warehousePreviewStatus === 'loading' ? 'Sending to LLM…' : 'Send to LLM'}
-                </button>
-                <button
-                  className="schedule-action secondary"
-                  type="button"
-                  onClick={() => {
-                    resetWarehouseDraftState()
-                    setWarehouseInput('')
-                    setWarehouseImages([])
-                    setWarehouseSaveStatus({ state: 'idle', message: '' })
-                  }}
-                >
-                  Clear
-                </button>
-              </div>
 
-              {warehousePreviewError && <div className="alert error">{warehousePreviewError}</div>}
-              {warehouseSaveStatus.state === 'error' && <div className="alert error">{warehouseSaveStatus.message}</div>}
-              {warehouseSaveStatus.state === 'success' && <div className="alert success">{warehouseSaveStatus.message}</div>}
-
-              {warehouseDraft && (
-                <div className="warehouse-review">
-                  <div className="form-row">
-                    <label className="field-large">
-                      <span>Rescued from</span>
-                      <input
-                        type="text"
-                        value={warehouseDraftMeta.location}
-                        onChange={(e) => setWarehouseDraftMeta((prev) => ({ ...prev, location: e.target.value }))}
-                        placeholder="e.g. Aldi on Kostner"
-                      />
-                    </label>
-                  </div>
-                  <div className="form-row">
-                    <label className="field-medium">
-                      <span>Rescue date</span>
-                      <input
-                        type="date"
-                        value={warehouseDraftMeta.rescuedDate}
-                        onChange={(e) => setWarehouseDraftMeta((prev) => ({ ...prev, rescuedDate: e.target.value }))}
-                      />
-                    </label>
-                  </div>
-                  {(warehouseDraftMeta.summary || warehouseDraftMeta.notes) && (
-                    <p className="llm-hint">
-                      LLM summary: {warehouseDraftMeta.summary || warehouseDraftMeta.notes}
-                    </p>
-                  )}
-
-                <div className="items-editor">
-                  <div className="items-head">
-                    <div>Item</div>
-                    <div className="qty-col">Qty</div>
-                    <div className="unit-col">Unit</div>
-                    <div className="category-col">Subcategory</div>
-                    <div className="lbs-col">lbs (est.)</div>
-                    <div className="remove-col" />
-                  </div>
-
-                  {warehouseItems.length === 0 && (
-                    <div className="items-empty">No items parsed yet. Add one below.</div>
-                    )}
-
-                    {warehouseItems.map((item, idx) => (
-                      <div className="items-row" key={`item-${idx}`}>
-                        <input
-                          type="text"
-                          value={item.name}
-                          onChange={(e) => updateWarehouseItem(idx, 'name', e.target.value)}
-                          placeholder="Item name"
-                        />
-                        <input
-                          type="text"
-                          className="qty-col"
-                          value={item.quantity ?? ''}
-                          onChange={(e) => updateWarehouseItem(idx, 'quantity', e.target.value)}
-                          placeholder="#"
-                        />
-                        <input
-                          type="text"
-                          className="unit-col"
-                          value={item.unit}
-                        onChange={(e) => updateWarehouseItem(idx, 'unit', e.target.value)}
-                        placeholder="cases / lbs / boxes"
-                      />
-                      <select
-                        className="category-col"
-                        value={item.subcategory}
-                        onChange={(e) => updateWarehouseItem(idx, 'subcategory', e.target.value)}
-                      >
-                        <option value="">Select</option>
-                        {WAREHOUSE_SUBCATEGORY_OPTIONS.map((option) => (
-                          <option key={option} value={option}>{formatSubcategoryLabel(option)}</option>
-                        ))}
-                      </select>
-                      <input
-                        type="text"
-                        className="lbs-col"
-                        value={item.estimated_lbs ?? item.pounds ?? ''}
-                        onChange={(e) => {
-                          updateWarehouseItem(idx, 'estimated_lbs', e.target.value)
-                          updateWarehouseItem(idx, 'pounds', e.target.value)
-                        }}
-                        placeholder="~lbs"
-                      />
-                        <button type="button" className="link-remove" onClick={() => removeWarehouseItem(idx)}>Remove</button>
-                      </div>
-                    ))}
-
-                    <div className="items-actions">
-                      <button type="button" className="schedule-action secondary" onClick={addWarehouseItem}>
-                        Add item
-                      </button>
-                    </div>
-                  </div>
-
-                  {warehouseDraft?.llm_error && (
-                    <p className="llm-hint">
-                      LLM error: {warehouseDraft.llm_error}. Using fallback parser output.
-                    </p>
-                  )}
-
-                  <div className="intake-actions">
-                    <button
-                      className="schedule-action"
-                      type="button"
-                      onClick={handleWarehouseSave}
-                      disabled={warehouseSaveStatus.state === 'saving'}
-                    >
-                      {warehouseSaveStatus.state === 'saving' ? 'Saving…' : 'Approve & save'}
-                    </button>
-                    <button
-                      className="schedule-action secondary"
-                      type="button"
-                      onClick={() => {
-                        resetWarehouseDraftState()
-                        setWarehouseInput('')
-                        setWarehouseImages([])
-                        setWarehouseSaveStatus({ state: 'idle', message: '' })
-                      }}
-                    >
-                      Start over
-                    </button>
-                  </div>
-                </div>
+              {loggingFormStatus.state === 'error' && (
+                <p className="save-status error">{loggingFormStatus.message}</p>
               )}
+
+              {loggingFormStatus.state === 'saved' && (
+                <p className="save-status">{loggingFormStatus.message}</p>
+              )}
+
+              <div className="form-row actions-row" style={{ marginTop: '1.5rem' }}>
+                <button
+                  className="schedule-action primary"
+                  type="button"
+                  onClick={handleLoggingSave}
+                  disabled={loggingFormStatus.state === 'saving'}
+                >
+                  {loggingFormStatus.state === 'saving' ? 'Saving...' : 'Save Log'}
+                </button>
+              </div>
             </div>
-
-            {deliveriesError && <div className="alert error">{deliveriesError}</div>}
-            {deliveriesLoading && <div className="loading">Loading deliveries…</div>}
-
-            {!deliveriesLoading && deliveries.length === 0 && (
-              <div className="empty-state">
-                <p>No deliveries found yet. Paste a Slack message above to add one.</p>
-              </div>
-            )}
-
-              <div className="delivery-table">
-                <div className="delivery-head">
-                  <div className="col date">Rescue date</div>
-                  <div className="col from">Rescued from</div>
-                  <div className="col weight">Rescued weight</div>
-                  <div className="col items">Items</div>
-                </div>
-                {deliveries.map((delivery) => {
-                  const rowId = deliveryRowId(delivery)
-                  const isExpanded = expandedDeliveryId === rowId
-                  const rescuedFrom = delivery.location || delivery.slack_channel_name || 'Unknown location'
-                  const sentAt = delivery.created_at || delivery.slack_sent_at
-                  const createdAt = formatDisplayDate(sentAt)
-                  const items = Array.isArray(delivery.items)
-                    ? delivery.items
-                    : (delivery.llm_json?.items || [])
-                  const hasItems = items.length > 0
-                  const weightTotal = totalRescuedWeight(items)
-                  return (
-                    <div key={rowId || createdAt}>
-                      <div
-                        className={`delivery-row ${isExpanded ? 'expanded' : ''}`}
-                        onClick={() => startEditingDelivery(delivery)}
-                      >
-                        <div className="col date">{createdAt}</div>
-                        <div className="col from">
-                          <span className="delivery-pill">{rescuedFrom}</span>
-                        </div>
-                        <div className="col weight">{weightTotal ? `${Math.round(weightTotal)} lbs` : '—'}</div>
-                        <div className="col items">
-                          <span className="delivery-items-inline">Items ({items.length || 0})</span>
-                        </div>
-                      </div>
-                      {isExpanded && (
-                        <div className="delivery-items-editor" onClick={(e) => e.stopPropagation()}>
-                          <div className="delivery-message">
-                            <p>{delivery.raw_text || 'No message text captured.'}</p>
-                            {delivery.photo_urls?.length > 0 && (
-                              <div className="delivery-photos inline">
-                                {delivery.photo_urls.map((url, idx) => (
-                                  <a key={url} href={url} target="_blank" rel="noreferrer">
-                                    <img src={url} alt={`Delivery photo ${idx + 1}`} />
-                                  </a>
-                                ))}
-                              </div>
-                            )}
-                          </div>
-                          {editingDeliveryItems[rowId]?.length ? (
-                            <>
-                              <div className="form-row">
-                                <label className="field-small">
-                                  <span>Rescue date</span>
-                                  <input
-                                    type="date"
-                                    value={editingDeliveryDates[rowId] || ''}
-                                    onChange={(e) => setEditingDeliveryDates((prev) => ({
-                                      ...prev,
-                                      [rowId]: e.target.value,
-                                    }))}
-                                  />
-                                </label>
-                              </div>
-                              <div className="items-head">
-                                <div>Item</div>
-                                <div className="qty-col">Qty</div>
-                                <div className="unit-col">Unit</div>
-                                <div className="category-col">Subcategory</div>
-                                <div className="lbs-col">lbs</div>
-                                <div className="remove-col" />
-                              </div>
-                              {editingDeliveryItems[rowId].map((item, idx) => (
-                                <div className="items-row" key={`${rowId}-edit-${idx}`}>
-                                  <input
-                                    type="text"
-                                    value={item.name}
-                                    onChange={(e) => updateDeliveryItem(rowId, idx, 'name', e.target.value)}
-                                    placeholder="Item name"
-                                  />
-                                  <input
-                                    type="text"
-                                    className="qty-col"
-                                    value={item.quantity ?? ''}
-                                    onChange={(e) => updateDeliveryItem(rowId, idx, 'quantity', e.target.value)}
-                                    placeholder="#"
-                                  />
-                                  <input
-                                    type="text"
-                                    className="unit-col"
-                                    value={item.unit || ''}
-                                    onChange={(e) => updateDeliveryItem(rowId, idx, 'unit', e.target.value)}
-                                    placeholder="cases / lbs / boxes"
-                                  />
-                                  <select
-                                    className="category-col"
-                                    value={item.subcategory || ''}
-                                    onChange={(e) => updateDeliveryItem(rowId, idx, 'subcategory', e.target.value)}
-                                  >
-                                    <option value="">Select</option>
-                                    {WAREHOUSE_SUBCATEGORY_OPTIONS.map((option) => (
-                                      <option key={option} value={option}>{formatSubcategoryLabel(option)}</option>
-                                    ))}
-                                  </select>
-                                  <input
-                                    type="text"
-                                    className="lbs-col"
-                                    value={item.pounds ?? ''}
-                                    onChange={(e) => updateDeliveryItem(rowId, idx, 'pounds', e.target.value)}
-                                    placeholder="lbs"
-                                  />
-                                  <button type="button" className="link-remove" onClick={() => updateDeliveryItem(rowId, idx, 'remove', true)}>
-                                    Remove
-                                  </button>
-                                </div>
-                              ))}
-                              <div className="delivery-items-editor items-actions">
-                                <button
-                                  type="button"
-                                  className="schedule-action secondary"
-                                  onClick={() => handleCancelDeliveryItems(delivery)}
-                                >
-                                  Cancel
-                                </button>
-                                <button
-                                  type="button"
-                                  className="schedule-action"
-                                  disabled={deliveryItemSaveState[rowId] === 'saving'}
-                                  onClick={() => handleSaveDeliveryItems(delivery)}
-                                >
-                                  {deliveryItemSaveState[rowId] === 'saving' ? 'Saving…' : 'Save items'}
-                                </button>
-                              </div>
-                              {deliveryItemSaveState[rowId] === 'saved' && <p className="save-status">Items saved.</p>}
-                              {deliveryItemSaveState[rowId] === 'error' && (
-                                <p className="save-status error">{deliveryItemSaveState.message || 'Unable to save items.'}</p>
-                              )}
-                            </>
-                          ) : (
-                            <p className="items-empty">No items to edit.</p>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
           </div>
         )}
 

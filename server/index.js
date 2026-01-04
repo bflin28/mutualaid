@@ -15,6 +15,7 @@ import {
   processWarehouseLogMessage,
   saveWarehouseLogDraft,
 } from './warehouseLogPipeline.js'
+import { addEstimatedWeights, calculateTotalWeight } from './itemWeightEstimator.js'
 
 const app = express()
 const PORT = process.env.PORT || 4000
