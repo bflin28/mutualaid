@@ -465,6 +465,154 @@ function App() {
   })
   const [loggingFormStatus, setLoggingFormStatus] = useState({ state: 'idle', message: '' })
   const [expandedItemIndex, setExpandedItemIndex] = useState(0) // Track which item is expanded for editing
+  const [activityLimit, setActivityLimit] = useState(10) // How many recent activities to show
+
+  // Callback to load audited stats (extracted for reuse)
+  const loadAuditedStats = useCallback(async () => {
+    setAuditedLoading(true)
+    setAuditedError('')
+    const { data, error } = await fetchSlackMessage({
+      auditFilter: 'audited',
+      start: 0,
+      limit: 5000,
+      includeRecurring: true,
+    })
+    if (error || !data) {
+      setAuditedError(error?.message || 'Could not load audited messages.')
+      setAuditedStats({
+        total: 0,
+        items: [],
+        byLocation: [],
+        bySubcategory: [],
+        totalLbs: 0,
+        records: [],
+      })
+    } else {
+      const allRecords = Array.isArray(data.records) ? data.records : []
+      const regularRecords = allRecords.filter(r => !r.recurring)
+      const recurringEventsAll = allRecords.filter(r => r.recurring)
+
+      const defaultStartDate = new Date()
+      defaultStartDate.setDate(defaultStartDate.getDate() - 90)
+      const virtualRecords = recurringEventsAll.flatMap(event =>
+        generateVirtualRecordsFromRecurring(
+          event,
+          defaultStartDate.toISOString().slice(0, 10),
+          new Date().toISOString().slice(0, 10)
+        )
+      )
+
+      const records = [...regularRecords, ...virtualRecords]
+      const items = []
+      const byLocationMap = new Map()
+      const bySubcategoryMap = new Map()
+      let totalLbs = 0
+      records.forEach((rec) => {
+        const cards = buildAuditedCards(rec)
+        cards.forEach((card) => {
+          const locKey = card.location || 'unknown'
+          const cardItems = Array.isArray(card.items) ? card.items : []
+          cardItems.forEach((it) => {
+            items.push(it)
+            const lbs = getItemWeight(it)
+            totalLbs += lbs
+            byLocationMap.set(locKey, (byLocationMap.get(locKey) || 0) + lbs)
+            const sub = (it.subcategory || '').trim() || 'Uncategorized'
+            bySubcategoryMap.set(sub, (bySubcategoryMap.get(sub) || 0) + lbs)
+          })
+        })
+      })
+      const byLocation = Array.from(byLocationMap.entries()).map(([name, lbs]) => ({ name, lbs }))
+        .sort((a, b) => b.lbs - a.lbs)
+      const bySubcategory = Array.from(bySubcategoryMap.entries()).map(([name, lbs]) => ({ name, lbs }))
+        .sort((a, b) => b.lbs - a.lbs)
+
+      setAuditedStats({ total: records.length, items, byLocation, bySubcategory, totalLbs, records: regularRecords })
+      setRecurringEvents(recurringEventsAll)
+    }
+    setAuditedLoading(false)
+  }, [])
+
+  // Auto-load audited stats when switching to the stats tab
+  useEffect(() => {
+    if (currentView === 'audited-stats' && auditedStats.records.length === 0 && !auditedLoading) {
+      loadAuditedStats()
+    }
+  }, [currentView, auditedStats.records.length, auditedLoading, loadAuditedStats])
+
+  // Calculate weekly stats from audited records
+  const weeklyStats = useMemo(() => {
+    const records = Array.isArray(auditedStats.records) ? auditedStats.records : []
+    const now = new Date()
+    const startOfWeek = new Date(now)
+    startOfWeek.setDate(now.getDate() - now.getDay()) // Sunday
+    startOfWeek.setHours(0, 0, 0, 0)
+    const startOfLastWeek = new Date(startOfWeek)
+    startOfLastWeek.setDate(startOfLastWeek.getDate() - 7)
+
+    let thisWeekLbs = 0
+    let thisWeekCount = 0
+    let lastWeekLbs = 0
+    const thisWeekByLocation = new Map()
+
+    records.forEach((rec) => {
+      const ts = getRecordTimestamp(rec)
+      if (!ts) return
+      const recordDate = new Date(ts)
+      const cards = buildAuditedCards(rec)
+      let recLbs = 0
+      cards.forEach((card) => {
+        const cardItems = Array.isArray(card.items) ? card.items : []
+        cardItems.forEach((it) => {
+          recLbs += getItemWeight(it)
+        })
+      })
+
+      if (recordDate >= startOfWeek) {
+        thisWeekLbs += recLbs
+        thisWeekCount += 1
+        const loc = rec.rescue_location_canonical || collectRescueLocations(rec)[0] || 'Unknown'
+        thisWeekByLocation.set(loc, (thisWeekByLocation.get(loc) || 0) + recLbs)
+      } else if (recordDate >= startOfLastWeek && recordDate < startOfWeek) {
+        lastWeekLbs += recLbs
+      }
+    })
+
+    // Find top location this week
+    let topLocation = 'N/A'
+    let topLocationLbs = 0
+    thisWeekByLocation.forEach((lbs, loc) => {
+      if (lbs > topLocationLbs) {
+        topLocationLbs = lbs
+        topLocation = loc
+      }
+    })
+
+    // Calculate trend
+    const trend = lastWeekLbs > 0 ? ((thisWeekLbs - lastWeekLbs) / lastWeekLbs) * 100 : 0
+
+    return {
+      thisWeekLbs,
+      thisWeekCount,
+      lastWeekLbs,
+      topLocation,
+      topLocationLbs,
+      trend,
+    }
+  }, [auditedStats.records])
+
+  // Get recent activity sorted by date (most recent first)
+  const recentActivity = useMemo(() => {
+    const records = Array.isArray(auditedStats.records) ? [...auditedStats.records] : []
+    return records
+      .filter(rec => getRecordTimestamp(rec))
+      .sort((a, b) => {
+        const aTime = getRecordTimestamp(a)
+        const bTime = getRecordTimestamp(b)
+        return (bTime || 0) - (aTime || 0) // Descending (most recent first)
+      })
+  }, [auditedStats.records])
+
   const sortedAuditedRecords = useMemo(() => {
     const records = Array.isArray(auditedStats.records) ? [...auditedStats.records] : []
     records.sort((a, b) => {
@@ -2384,96 +2532,93 @@ function App() {
 
         {currentView === 'audited-stats' && (
           <div className="deliveries">
-            <div className="deliveries-header">
-              <div>
-                <h2>Audited stats</h2>
-                <p>Summaries based on audited/confirmed extractions.</p>
-              </div>
-              <div className="deliveries-actions">
+            {/* This Week Dashboard */}
+            <div className="stats-dashboard">
+              <div className="stats-dashboard-header">
+                <h2>This Week</h2>
                 <button
-                  id="audited-refresh-btn"
                   className="schedule-action secondary"
                   type="button"
-                  onClick={async () => {
-                    setAuditedLoading(true)
-                    setAuditedError('')
+                  onClick={() => {
                     setExpandedAuditedId(null)
-                    const { data, error } = await fetchSlackMessage({
-                      auditFilter: 'audited',
-                      start: 0,
-                      limit: 5000,
-                      includeRecurring: true,
-                    })
-                    if (error || !data) {
-                      setAuditedError(error?.message || 'Could not load audited messages.')
-                      setAuditedStats({
-                        total: 0,
-                        items: [],
-                        byLocation: [],
-                        bySubcategory: [],
-                        totalLbs: 0,
-                        records: [],
-                      })
-                    } else {
-                      const allRecords = Array.isArray(data.records) ? data.records : []
-
-                      // Separate regular and recurring events
-                      const regularRecords = allRecords.filter(r => !r.recurring)
-                      const recurringEventsAll = allRecords.filter(r => r.recurring)
-
-                      // Generate virtual records from recurring events
-                      // Use last 90 days as default date range
-                      const defaultStartDate = new Date()
-                      defaultStartDate.setDate(defaultStartDate.getDate() - 90)
-                      const virtualRecords = recurringEventsAll.flatMap(event =>
-                        generateVirtualRecordsFromRecurring(
-                          event,
-                          defaultStartDate.toISOString().slice(0, 10),
-                          new Date().toISOString().slice(0, 10)
-                        )
-                      )
-
-                      // Combine regular and virtual records for stats calculation
-                      const records = [...regularRecords, ...virtualRecords]
-
-                      const items = []
-                      const byLocationMap = new Map()
-                      const bySubcategoryMap = new Map()
-                      let totalLbs = 0
-                      records.forEach((rec) => {
-                        const cards = buildAuditedCards(rec)
-                        cards.forEach((card) => {
-                          const locKey = card.location || 'unknown'
-                          const cardItems = Array.isArray(card.items) ? card.items : []
-                          cardItems.forEach((it) => {
-                            items.push(it)
-                            const lbs = getItemWeight(it)
-                            totalLbs += lbs
-                            byLocationMap.set(locKey, (byLocationMap.get(locKey) || 0) + lbs)
-                            const sub = (it.subcategory || '').trim() || 'Uncategorized'
-                            bySubcategoryMap.set(sub, (bySubcategoryMap.get(sub) || 0) + lbs)
-                          })
-                        })
-                      })
-                      const byLocation = Array.from(byLocationMap.entries()).map(([name, lbs]) => ({ name, lbs }))
-                        .sort((a, b) => b.lbs - a.lbs)
-                      const bySubcategory = Array.from(bySubcategoryMap.entries()).map(([name, lbs]) => ({ name, lbs }))
-                        .sort((a, b) => b.lbs - a.lbs)
-
-                      // Store only regular records to avoid UI clutter
-                      setAuditedStats({ total: records.length, items, byLocation, bySubcategory, totalLbs, records: regularRecords })
-                    }
-                    setAuditedLoading(false)
+                    loadAuditedStats()
                   }}
                   disabled={auditedLoading}
                 >
-                  {auditedLoading ? 'Loading…' : 'Refresh'}
+                  {auditedLoading ? 'Loading...' : 'Refresh'}
                 </button>
+              </div>
+              <div className="stats-dashboard-cards">
+                <div className="stat-card">
+                  <span className="stat-label">Rescued</span>
+                  <span className="stat-value">{weeklyStats.thisWeekLbs.toFixed(0)} lbs</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-label">Rescues</span>
+                  <span className="stat-value">{weeklyStats.thisWeekCount}</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-label">Top Location</span>
+                  <span className="stat-value stat-value-small">{weeklyStats.topLocation}</span>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-label">vs Last Week</span>
+                  <span className={`stat-value stat-trend ${weeklyStats.trend >= 0 ? 'trend-up' : 'trend-down'}`}>
+                    {weeklyStats.trend >= 0 ? '↑' : '↓'} {Math.abs(weeklyStats.trend).toFixed(0)}%
+                  </span>
+                </div>
               </div>
             </div>
 
             {auditedError && <div className="error-text">{auditedError}</div>}
 
+            {/* Recent Activity Feed */}
+            <div className="activity-feed">
+              <h3 className="activity-feed-title">Recent Activity</h3>
+              {recentActivity.length === 0 && !auditedLoading && (
+                <p className="activity-empty">No rescue activity yet.</p>
+              )}
+              {recentActivity.slice(0, activityLimit).map((rec) => {
+                const ts = getRecordTimestamp(rec)
+                const date = ts ? new Date(ts) : null
+                const dateStr = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
+                const fromLoc = rec.rescue_location_canonical || collectRescueLocations(rec)[0] || 'Unknown'
+                const toLoc = rec.drop_off_location_canonical || rec.drop_off_location || ''
+                const cards = buildAuditedCards(rec)
+                let totalLbs = 0
+                let itemCount = 0
+                cards.forEach((card) => {
+                  const cardItems = Array.isArray(card.items) ? card.items : []
+                  cardItems.forEach((it) => {
+                    totalLbs += getItemWeight(it)
+                    itemCount += 1
+                  })
+                })
+                return (
+                  <div key={rec.id || rec.message_key} className="activity-row">
+                    <span className="activity-date">{dateStr}</span>
+                    <span className="activity-location">
+                      <span className="activity-from">{fromLoc}</span>
+                      {toLoc && <span className="activity-arrow">→</span>}
+                      {toLoc && <span className="activity-to">{toLoc}</span>}
+                    </span>
+                    <span className="activity-weight">{totalLbs.toFixed(0)} lbs</span>
+                    <span className="activity-items">{itemCount} items</span>
+                  </div>
+                )
+              })}
+              {recentActivity.length > activityLimit && (
+                <button
+                  className="activity-show-more"
+                  type="button"
+                  onClick={() => setActivityLimit(prev => prev + 10)}
+                >
+                  Show more ({recentActivity.length - activityLimit} remaining)
+                </button>
+              )}
+            </div>
+
+            {/* All-time Stats & Location Breakdown */}
             <div className="card stats-card">
               <div className="filter-row">
                 <div style={{ flex: 1 }}>

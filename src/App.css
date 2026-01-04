@@ -2489,6 +2489,186 @@
   font-weight: 800;
 }
 
+/* Stats Dashboard */
+.stats-dashboard {
+  background: linear-gradient(135deg, #f0fdf4 0%, #ecfdf5 100%);
+  border: 1px solid #bbf7d0;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.stats-dashboard-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1rem;
+}
+
+.stats-dashboard-header h2 {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #166534;
+}
+
+.stats-dashboard-cards {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1rem;
+}
+
+.stat-card {
+  background: white;
+  border: 1px solid #d1fae5;
+  border-radius: 12px;
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.stat-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6b7280;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.stat-value {
+  font-size: 1.5rem;
+  font-weight: 800;
+  color: #0f172a;
+}
+
+.stat-value-small {
+  font-size: 1rem;
+  font-weight: 700;
+}
+
+.stat-trend {
+  font-weight: 700;
+}
+
+.stat-trend.trend-up {
+  color: #16a34a;
+}
+
+.stat-trend.trend-down {
+  color: #dc2626;
+}
+
+/* Activity Feed */
+.activity-feed {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 16px;
+  padding: 1.25rem 1.5rem;
+  margin-bottom: 1.25rem;
+}
+
+.activity-feed-title {
+  margin: 0 0 1rem 0;
+  font-size: 1rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.activity-empty {
+  color: #9ca3af;
+  font-size: 0.9rem;
+  text-align: center;
+  padding: 1rem 0;
+}
+
+.activity-row {
+  display: grid;
+  grid-template-columns: 70px 1fr 80px 70px;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.activity-row:last-of-type {
+  border-bottom: none;
+}
+
+.activity-row:hover {
+  background: #f8fafc;
+  margin: 0 -0.75rem;
+  padding-left: 0.75rem;
+  padding-right: 0.75rem;
+  border-radius: 8px;
+}
+
+.activity-date {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.activity-location {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.activity-from {
+  font-weight: 600;
+  color: #0f172a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-arrow {
+  color: #9ca3af;
+  flex-shrink: 0;
+}
+
+.activity-to {
+  color: #6b7280;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.activity-weight {
+  font-weight: 700;
+  color: #16a34a;
+  text-align: right;
+}
+
+.activity-items {
+  font-size: 0.85rem;
+  color: #9ca3af;
+  text-align: right;
+}
+
+.activity-show-more {
+  display: block;
+  width: 100%;
+  margin-top: 0.75rem;
+  padding: 0.5rem;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  color: #475569;
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.activity-show-more:hover {
+  background: #f1f5f9;
+}
+
 /* Mobile Responsiveness */
 @media (max-width: 768px) {
   .header-top {
@@ -2521,6 +2701,18 @@
   
   .instruction-grid {
     grid-template-columns: 1fr;
+  }
+
+  .stats-dashboard-cards {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .activity-row {
+    grid-template-columns: 60px 1fr 70px;
+  }
+
+  .activity-items {
+    display: none;
   }
 
   .signup-form-grid {
