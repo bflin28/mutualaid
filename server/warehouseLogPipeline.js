@@ -11,7 +11,6 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY || process.env.OPENAI_API_TOKE
 const OPENAI_API_BASE = process.env.OPENAI_API_BASE || 'https://api.openai.com/v1'
 const WAREHOUSE_LLM_MODEL = process.env.WAREHOUSE_LLM_MODEL || process.env.OPENAI_MODEL || 'gpt-4o-mini'
 const WAREHOUSE_LOG_TABLE = process.env.WAREHOUSE_LOG_TABLE || 'warehouse_logs'
-const WAREHOUSE_LOG_ITEMS_TABLE = process.env.WAREHOUSE_LOG_ITEMS_TABLE || 'warehouse_log_items'
 const WAREHOUSE_IMAGE_BUCKET = process.env.WAREHOUSE_IMAGE_BUCKET || 'warehouse-images'
 const SUPABASE_URL = process.env.SUPABASE_URL || ''
 const MAX_IMAGES = Number(process.env.WAREHOUSE_LLM_MAX_IMAGES || 3)
@@ -997,19 +996,32 @@ const persistWarehouseLog = async ({
 
   const uploadedImages = await uploadImagesToBucket({ supabase, images, event: slackMeta.event || slackMeta })
   const createdAt = coerceDateInputToIso(rescuedAt)
+  // Clean and format items for embedded JSONB storage
+  const cleanedItems = cleanParsedItems(parsedItems).filter((item) => (item?.name || item?.item_name || '').trim())
+  const itemsJson = cleanedItems.map((item) => ({
+    name: item.name || item.item_name || null,
+    quantity: toNumberOrNull(item.quantity),
+    unit: item.unit || item.container || null,
+    estimated_lbs: toNumberOrNull(item.pounds ?? item.estimated_lbs),
+    subcategory: item.subcategory || null,
+    notes: item.notes || null,
+    sources: item.sources || null,
+  }))
+
   const payload = compact({
     created_at: createdAt || undefined,
+    rescued_at: createdAt || undefined,
     location: location || null,
     drop_off_location: dropOff || null,
     raw_text: rawText,
     photo_urls: uploadedImages.urls?.length ? uploadedImages.urls : null,
     image_files: images?.imagesMeta,
     image_download_errors: [...(images?.errors || []), ...(uploadedImages.errors || [])].filter(Boolean),
+    items: itemsJson,
   })
 
   let supabaseResult = null
   let headerRow = null
-  let itemResult = null
 
   const response = await supabase
     .from(WAREHOUSE_LOG_TABLE)
@@ -1021,43 +1033,9 @@ const persistWarehouseLog = async ({
 
   if (response.error) {
     console.error('Supabase warehouse log insert error:', response.error)
-  } else if (headerRow) {
-    const deleteExisting = await supabase
-      .from(WAREHOUSE_LOG_ITEMS_TABLE)
-      .delete()
-      .eq('log_id', headerRow.id)
-    if (deleteExisting.error) {
-      console.error('Supabase warehouse log items delete error:', deleteExisting.error)
-    }
-
-    const cleanedItems = cleanParsedItems(parsedItems).filter((item) => (item?.name || item?.item_name || '').trim())
-    if (cleanedItems.length) {
-      const itemRows = cleanedItems.map((item) => {
-        return {
-          id: stableUuidFromString(`${headerRow.id}:${canonicalItemKey(item)}`),
-          log_id: headerRow.id,
-          item_name: item.name || item.item_name || null,
-          quantity: toNumberOrNull(item.quantity),
-          unit: item.unit || item.container || null,
-          pounds: toNumberOrNull(item.pounds ?? item.estimated_lbs),
-          notes: buildItemNotes(item),
-          sources: item.sources || null,
-          confidence: item.confidence ?? null,
-        }
-      })
-
-      const insertItems = await supabase
-        .from(WAREHOUSE_LOG_ITEMS_TABLE)
-        .upsert(itemRows, { onConflict: 'id' })
-        .select()
-      itemResult = insertItems
-      if (insertItems.error) {
-        console.error('Supabase warehouse log items insert error:', insertItems.error)
-      }
-    }
   }
 
-  return { payload, supabaseResult, headerRow, itemResult, uploadedImages }
+  return { payload, supabaseResult, headerRow, uploadedImages }
 }
 
 const formatSlackFollowup = ({ llmResult, location, items }) => {

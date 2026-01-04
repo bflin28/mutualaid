@@ -20,7 +20,6 @@ import { addEstimatedWeights, calculateTotalWeight } from './itemWeightEstimator
 const app = express()
 const PORT = process.env.PORT || 4000
 const WAREHOUSE_LOG_TABLE = process.env.WAREHOUSE_LOG_TABLE || 'warehouse_logs'
-const WAREHOUSE_LOG_ITEMS_TABLE = process.env.WAREHOUSE_LOG_ITEMS_TABLE || 'warehouse_log_items'
 
 const supabaseUrl = process.env.SUPABASE_URL
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.SUPABASE_SERVICE_KEY
@@ -374,7 +373,7 @@ app.get('/api/warehouse/logs', async (req, res) => {
 
   const { data, error } = await supabase
     .from(WAREHOUSE_LOG_TABLE)
-    .select(`*, items:${WAREHOUSE_LOG_ITEMS_TABLE}(*)`)
+    .select('*')
     .order('created_at', { ascending: false })
     .limit(limit)
 
@@ -388,7 +387,7 @@ app.get('/api/warehouse/logs', async (req, res) => {
     location: (row.location && String(row.location).trim())
       ? row.location
       : inferRescueLocationFromText(row.raw_text || '') || row.location,
-    items: dedupeWarehouseItems(row.items),
+    items: dedupeWarehouseItems(row.items || []),
   }))
 
   res.json({ data: cleaned })
@@ -471,55 +470,39 @@ app.put('/api/warehouse/logs/:id/items', async (req, res) => {
   }
 
   try {
-    await supabase.from(WAREHOUSE_LOG_ITEMS_TABLE).delete().eq('log_id', id)
+    // Format items for JSONB storage
+    const itemsJson = items
+      .filter((item) => (item.item_name || item.name || '').trim())
+      .map((item) => ({
+        name: item.item_name || item.name || '',
+        quantity: item.quantity ?? null,
+        unit: item.unit || '',
+        estimated_lbs: item.pounds ?? item.estimated_lbs ?? null,
+        subcategory: item.subcategory || null,
+        notes: item.notes || null,
+        sources: item.sources || null,
+      }))
 
-    let updatedLog = null
+    // Build update payload
+    const updatePayload = { items: itemsJson }
     if (rescuedAtIso) {
-      const updateLog = await supabase
-        .from(WAREHOUSE_LOG_TABLE)
-        .update({ created_at: rescuedAtIso })
-        .eq('id', id)
-        .select()
-        .maybeSingle()
-      if (updateLog.error) {
-        res.status(500).json({ error: updateLog.error.message || 'Failed to update log date' })
-        return
-      }
-      updatedLog = updateLog.data || null
+      updatePayload.rescued_at = rescuedAtIso
+      updatePayload.created_at = rescuedAtIso
     }
 
-    const rows = items
-      .map((item) => {
-        const notes = buildItemNotes(item)
-        return {
-          id: item.id || (randomUUID ? randomUUID() : undefined),
-          log_id: id,
-          item_name: item.item_name || item.name || '',
-          quantity: item.quantity ?? null,
-          unit: item.unit || '',
-          pounds: item.pounds ?? item.estimated_lbs ?? null,
-          notes: notes || item.notes || null,
-          sources: item.sources || null,
-        }
-      })
-      .filter((row) => row.item_name?.trim())
-
-    if (!rows.length) {
-      res.json({ data: { items: [], rescued_at: updatedLog?.created_at || rescuedAtIso || null } })
-      return
-    }
-
-    const insert = await supabase
-      .from(WAREHOUSE_LOG_ITEMS_TABLE)
-      .upsert(rows, { onConflict: 'id' })
+    const updateResult = await supabase
+      .from(WAREHOUSE_LOG_TABLE)
+      .update(updatePayload)
+      .eq('id', id)
       .select()
+      .maybeSingle()
 
-    if (insert.error) {
-      res.status(500).json({ error: insert.error.message || 'Failed to update items' })
+    if (updateResult.error) {
+      res.status(500).json({ error: updateResult.error.message || 'Failed to update log' })
       return
     }
 
-    res.json({ data: { items: insert.data || [], rescued_at: updatedLog?.created_at || rescuedAtIso || null } })
+    res.json({ data: { items: itemsJson, rescued_at: updateResult.data?.rescued_at || rescuedAtIso || null } })
   } catch (err) {
     res.status(500).json({ error: err.message || 'Failed to update items' })
   }

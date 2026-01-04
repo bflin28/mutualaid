@@ -209,11 +209,47 @@ def load_records() -> List[Dict[str, Any]]:
 
 
 def load_audited() -> List[Dict[str, Any]]:
-  """Load audited records from Supabase."""
+  """Load audited records from both slack_messages_audited and warehouse_logs tables."""
   if not USE_SUPABASE or not supabase:
     raise RuntimeError("Supabase not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
-  response = supabase.table("slack_messages_audited").select("*").execute()
-  return [row["data"] for row in response.data]
+
+  records = []
+
+  # Load from slack_messages_audited (legacy audited Slack messages)
+  try:
+    response = supabase.table("slack_messages_audited").select("*").execute()
+    for row in response.data:
+      records.append(row["data"])
+  except Exception as e:
+    print(f"Warning: Could not load from slack_messages_audited: {e}")
+
+  # Load from warehouse_logs (new rescue logs)
+  try:
+    response = supabase.table("warehouse_logs").select("*").execute()
+    for row in response.data:
+      # Normalize warehouse_logs format to match slack_messages_audited format
+      items = row.get("items") or []
+      total_lbs = sum(float(item.get("estimated_lbs") or 0) for item in items)
+      normalized = {
+        "id": f"warehouse-{row['id']}",
+        "source": "warehouse_logs",
+        "rescue_location_canonical": row.get("location") or "",
+        "drop_off_location_canonical": row.get("drop_off_location") or "",
+        "start_ts": row.get("rescued_at") or row.get("created_at"),
+        "raw_messages": [row.get("raw_text")] if row.get("raw_text") else [],
+        "sections": [{
+          "location_canonical": row.get("location") or "",
+          "items": items,
+        }] if items else [],
+        "total_estimated_lbs": total_lbs,
+        "audited": True,
+        "recurring": False,
+      }
+      records.append(normalized)
+  except Exception as e:
+    print(f"Warning: Could not load from warehouse_logs: {e}")
+
+  return records
 
 
 def save_audited_record(rec: Dict[str, Any]) -> None:
