@@ -1379,6 +1379,13 @@ function App() {
       return
     }
 
+    // Check that all items have a quantity
+    const itemMissingQty = items.find(item => item.quantity === null || item.quantity === '')
+    if (itemMissingQty) {
+      setLoggingFormStatus({ state: 'error', message: `Please enter a quantity for "${itemMissingQty.name}".` })
+      return
+    }
+
     if (!loggingFormData.location.trim()) {
       setLoggingFormStatus({ state: 'error', message: 'Please enter a location.' })
       return
@@ -2409,7 +2416,7 @@ function App() {
                               inputMode="decimal"
                               value={item.quantity}
                               onChange={(e) => updateLoggingFormItem(idx, 'quantity', e.target.value)}
-                              placeholder="5"
+                              placeholder=""
                             />
                           </div>
 
