@@ -233,7 +233,7 @@ def load_audited() -> List[Dict[str, Any]]:
         "id": f"rescue-{row['id']}",
         "source": "rescue_logs",
         "rescue_location_canonical": row.get("location") or "",
-        "drop_off_location_canonical": "",
+        "drop_off_location_canonical": row.get("drop_off") or "",
         "start_ts": row.get("rescued_at") or row.get("created_at"),
         "raw_messages": [],
         "sections": [{
@@ -241,7 +241,6 @@ def load_audited() -> List[Dict[str, Any]]:
           "items": items,
         }] if items else [],
         "total_estimated_lbs": float(row.get("total_estimated_lbs") or 0),
-        "photo_urls": row.get("photo_urls") or [],
         "audited": True,
         "recurring": False,
       }
@@ -712,10 +711,10 @@ def create_rescue_log(payload: Dict[str, Any]):
   try:
     result = supabase.table("rescue_logs").insert({
       "location": payload.get("location"),
+      "drop_off": payload.get("drop_off"),
       "rescued_at": payload.get("rescued_at"),
       "items": items_with_weights,
       "total_estimated_lbs": round(total_lbs, 1) if total_lbs > 0 else None,
-      "photo_urls": payload.get("photo_urls", []),
       "notes": payload.get("notes"),
     }).execute()
 

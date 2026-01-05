@@ -4,14 +4,17 @@
 CREATE TABLE IF NOT EXISTS rescue_logs (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   location TEXT NOT NULL,
+  drop_off TEXT,
   rescued_at DATE NOT NULL,
   items JSONB NOT NULL DEFAULT '[]',
   total_estimated_lbs NUMERIC(10,1),
-  photo_urls JSONB DEFAULT '[]',
   notes TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- Add drop_off column if table already exists
+ALTER TABLE rescue_logs ADD COLUMN IF NOT EXISTS drop_off TEXT;
 
 -- Index for querying by location
 CREATE INDEX IF NOT EXISTS idx_rescue_logs_location ON rescue_logs(location);

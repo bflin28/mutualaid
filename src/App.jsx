@@ -453,6 +453,8 @@ function App() {
   const [recurringFormStatus, setRecurringFormStatus] = useState({ state: 'idle', message: '' })
   const [loggingFormData, setLoggingFormData] = useState({
     location: '',
+    dropOff: '',
+    dropOffCustom: '',
     date: todayDateString(),
     items: [{
       name: '',
@@ -461,7 +463,6 @@ function App() {
       subcategory: '',
       estimated_lbs: '',
     }],
-    photos: [],
   })
   const [loggingFormStatus, setLoggingFormStatus] = useState({ state: 'idle', message: '' })
   const [expandedItemIndex, setExpandedItemIndex] = useState(0) // Track which item is expanded for editing
@@ -1392,11 +1393,14 @@ function App() {
     }
 
     // Build payload for rescue_logs table
+    const dropOffValue = loggingFormData.dropOff === 'other'
+      ? loggingFormData.dropOffCustom
+      : loggingFormData.dropOff
     const payload = {
       location: loggingFormData.location,
+      drop_off: dropOffValue,
       rescued_at: loggingFormData.date,
       items,
-      photo_urls: loggingFormData.photos,
     }
 
     const { error } = await saveRescueLog(payload)
@@ -1412,6 +1416,8 @@ function App() {
     setTimeout(() => {
       setLoggingFormData({
         location: '',
+        dropOff: '',
+        dropOffCustom: '',
         date: todayDateString(),
         items: [{
           name: '',
@@ -1420,7 +1426,6 @@ function App() {
           subcategory: '',
           estimated_lbs: '',
         }],
-        photos: [],
       })
       setExpandedItemIndex(0) // Reset to first item
       setLoggingFormStatus({ state: 'idle', message: '' })
@@ -2290,7 +2295,7 @@ function App() {
             <div className="logging-form card">
               <div className="form-row">
                 <label className="full-width">
-                  <span>Location</span>
+                  <span>Rescued From</span>
                   <input
                     type="text"
                     value={loggingFormData.location}
@@ -2304,6 +2309,31 @@ function App() {
                     ))}
                   </datalist>
                 </label>
+              </div>
+
+              <div className="form-row">
+                <label className="full-width">
+                  <span>Drop Off</span>
+                  <select
+                    value={loggingFormData.dropOff}
+                    onChange={(e) => setLoggingFormData(prev => ({ ...prev, dropOff: e.target.value }))}
+                  >
+                    <option value="">Select drop off location</option>
+                    <option value="Keystone">Keystone</option>
+                    <option value="Urban Canopy">Urban Canopy</option>
+                    <option value="other">Other...</option>
+                  </select>
+                </label>
+                {loggingFormData.dropOff === 'other' && (
+                  <label className="full-width" style={{ marginTop: '0.5rem' }}>
+                    <input
+                      type="text"
+                      value={loggingFormData.dropOffCustom}
+                      onChange={(e) => setLoggingFormData(prev => ({ ...prev, dropOffCustom: e.target.value }))}
+                      placeholder="Enter drop off location"
+                    />
+                  </label>
+                )}
               </div>
 
               <div className="form-row">
@@ -2459,35 +2489,6 @@ function App() {
                     + Add item
                   </button>
                 </div>
-              </div>
-
-              <div className="form-row" style={{ marginTop: '1.5rem' }}>
-                <label className="full-width">
-                  <span>Photos</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    onChange={(e) => handleLoggingPhotosChange(e.target.files)}
-                  />
-                </label>
-                {loggingFormData.photos.length > 0 && (
-                  <div className="image-previews" style={{ marginTop: '0.5rem' }}>
-                    {loggingFormData.photos.map((url, idx) => (
-                      <div className="image-preview" key={`photo-${idx}`}>
-                        <img src={url} alt={`Photo ${idx + 1}`} />
-                        <button
-                          type="button"
-                          className="image-remove"
-                          onClick={() => removeLoggingPhoto(idx)}
-                          aria-label="Remove photo"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
               </div>
 
               {loggingFormStatus.state === 'error' && (
