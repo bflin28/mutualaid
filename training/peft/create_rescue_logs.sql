@@ -1,0 +1,26 @@
+-- Create rescue_logs table for manual rescue log entries
+-- Run this in Supabase SQL Editor
+
+CREATE TABLE IF NOT EXISTS rescue_logs (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  location TEXT NOT NULL,
+  rescued_at DATE NOT NULL,
+  items JSONB NOT NULL DEFAULT '[]',
+  total_estimated_lbs NUMERIC(10,1),
+  photo_urls JSONB DEFAULT '[]',
+  notes TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Index for querying by location
+CREATE INDEX IF NOT EXISTS idx_rescue_logs_location ON rescue_logs(location);
+
+-- Index for querying by rescue date
+CREATE INDEX IF NOT EXISTS idx_rescue_logs_rescued_at ON rescue_logs(rescued_at);
+
+-- Example items JSONB structure:
+-- [
+--   {"name": "Apples", "quantity": 2, "unit": "cs", "subcategory": "fruit", "estimated_lbs": 40},
+--   {"name": "Bread", "quantity": 10, "unit": "loaves", "subcategory": "bakery", "estimated_lbs": 15}
+-- ]

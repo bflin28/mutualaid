@@ -3,7 +3,7 @@ import './App.css'
 import { submitPickupSignup, createEvent as createEventApi, fetchApprovedEvents, triggerSlackAlert } from './lib/pickupApi'
 import { fetchWarehouseLogs, previewWarehouseLog, saveWarehouseLog, updateWarehouseLogItems } from './lib/warehouseLogApi'
 import { fetchSlackMessage, searchSlackMessages, fetchSlackMessageById } from './lib/slackBrowserApi'
-import { auditSlackRecord } from './lib/slackAuditApi'
+import { auditSlackRecord, saveRescueLog } from './lib/slackAuditApi'
 import { runInference, compareExtractions, getTrainingStats } from './lib/modelInferenceApi'
 import locationAliases from './data/location_aliases.json'
 import itemSuggestions from './data/item_suggestions.json'
@@ -1384,40 +1384,15 @@ function App() {
       return
     }
 
-    // Backend will calculate total_estimated_lbs based on item conversions
-    const total_estimated_lbs = null
-
-    const now = new Date().toISOString()
-    const locationKey = normalizeLocationKey(loggingFormData.location)
-    const id = `rescue-log-${locationKey}-${Date.now()}`
-
+    // Build payload for rescue_logs table
     const payload = {
-      id,
-      recurring: false,
-      rescue_location_canonical: loggingFormData.location,
-      rescue_location: loggingFormData.location,
-      rescue_date: loggingFormData.date,
-      sections: [{
-        location: loggingFormData.location,
-        location_canonical: loggingFormData.location,
-        items,
-      }],
-      items: [],
-      total_estimated_lbs,
-      audited: true,
-      created_at: loggingFormData.date + 'T12:00:00Z',
-      updated_at: now,
-      user: '',
-      start_ts: '',
-      end_ts: '',
-      direction: 'inbound',
-      drop_off_location: '',
-      drop_off_location_canonical: '',
-      raw_messages: [`Manual rescue log - ${loggingFormData.location} - ${loggingFormData.date}`],
+      location: loggingFormData.location,
+      rescued_at: loggingFormData.date,
+      items,
       photo_urls: loggingFormData.photos,
     }
 
-    const { error } = await auditSlackRecord(payload)
+    const { error } = await saveRescueLog(payload)
 
     if (error) {
       setLoggingFormStatus({ state: 'error', message: error.message || 'Failed to save rescue log.' })

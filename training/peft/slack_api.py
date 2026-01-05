@@ -209,13 +209,13 @@ def load_records() -> List[Dict[str, Any]]:
 
 
 def load_audited() -> List[Dict[str, Any]]:
-  """Load audited records from both slack_messages_audited and warehouse_logs tables."""
+  """Load audited records from both slack_messages_audited and rescue_logs tables."""
   if not USE_SUPABASE or not supabase:
     raise RuntimeError("Supabase not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY.")
 
   records = []
 
-  # Load from slack_messages_audited (legacy audited Slack messages)
+  # Load from slack_messages_audited (audited Slack messages)
   try:
     response = supabase.table("slack_messages_audited").select("*").execute()
     for row in response.data:
@@ -223,31 +223,31 @@ def load_audited() -> List[Dict[str, Any]]:
   except Exception as e:
     print(f"Warning: Could not load from slack_messages_audited: {e}")
 
-  # Load from warehouse_logs (new rescue logs)
+  # Load from rescue_logs (manual rescue log entries)
   try:
-    response = supabase.table("warehouse_logs").select("*").execute()
+    response = supabase.table("rescue_logs").select("*").execute()
     for row in response.data:
-      # Normalize warehouse_logs format to match slack_messages_audited format
+      # Normalize rescue_logs format to match slack_messages_audited format for stats
       items = row.get("items") or []
-      total_lbs = sum(float(item.get("estimated_lbs") or 0) for item in items)
       normalized = {
-        "id": f"warehouse-{row['id']}",
-        "source": "warehouse_logs",
+        "id": f"rescue-{row['id']}",
+        "source": "rescue_logs",
         "rescue_location_canonical": row.get("location") or "",
-        "drop_off_location_canonical": row.get("drop_off_location") or "",
+        "drop_off_location_canonical": "",
         "start_ts": row.get("rescued_at") or row.get("created_at"),
-        "raw_messages": [row.get("raw_text")] if row.get("raw_text") else [],
+        "raw_messages": [],
         "sections": [{
           "location_canonical": row.get("location") or "",
           "items": items,
         }] if items else [],
-        "total_estimated_lbs": total_lbs,
+        "total_estimated_lbs": float(row.get("total_estimated_lbs") or 0),
+        "photo_urls": row.get("photo_urls") or [],
         "audited": True,
         "recurring": False,
       }
       records.append(normalized)
   except Exception as e:
-    print(f"Warning: Could not load from warehouse_logs: {e}")
+    print(f"Warning: Could not load from rescue_logs: {e}")
 
   return records
 
@@ -685,6 +685,44 @@ def audit_record(rec: Dict[str, Any]):
     return {"status": "ok", "id": rec.get("id"), "audited": False}
   except Exception as exc:
     raise HTTPException(status_code=500, detail=f"Could not persist audit: {exc}") from exc
+
+
+@app.post("/rescue-log")
+def create_rescue_log(payload: Dict[str, Any]):
+  """Create a new rescue log entry in the rescue_logs table."""
+  if not USE_SUPABASE or not supabase:
+    raise HTTPException(status_code=500, detail="Supabase not configured")
+
+  # Validate required fields
+  if not payload.get("location"):
+    raise HTTPException(status_code=400, detail="Missing required field: location")
+  if not payload.get("rescued_at"):
+    raise HTTPException(status_code=400, detail="Missing required field: rescued_at")
+
+  items = payload.get("items", [])
+  if not isinstance(items, list):
+    raise HTTPException(status_code=400, detail="items must be an array")
+
+  # Add estimated weights to items
+  items_with_weights = add_estimated_weights(items)
+
+  # Calculate total estimated lbs
+  total_lbs = sum(float(item.get("estimated_lbs") or 0) for item in items_with_weights)
+
+  try:
+    result = supabase.table("rescue_logs").insert({
+      "location": payload.get("location"),
+      "rescued_at": payload.get("rescued_at"),
+      "items": items_with_weights,
+      "total_estimated_lbs": round(total_lbs, 1) if total_lbs > 0 else None,
+      "photo_urls": payload.get("photo_urls", []),
+      "notes": payload.get("notes"),
+    }).execute()
+
+    new_id = result.data[0]["id"] if result.data else None
+    return {"status": "ok", "id": new_id}
+  except Exception as exc:
+    raise HTTPException(status_code=500, detail=f"Could not save rescue log: {exc}") from exc
 
 
 @app.get("/health")
