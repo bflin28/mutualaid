@@ -11,11 +11,13 @@ import { fetchWarehouseLogs, previewWarehouseLog, saveWarehouseLog, updateWareho
 import { fetchSlackMessage, searchSlackMessages, fetchSlackMessageById } from './lib/slackBrowserApi'
 import { auditSlackRecord, saveRescueLog } from './lib/slackAuditApi'
 import { runInference, compareExtractions, getTrainingStats } from './lib/modelInferenceApi'
+import rescueLocations from './data/rescue_locations.json'
+import dropOffLocations from './data/drop_off_locations.json'
 import locationAliases from './data/location_aliases.json'
 import itemSuggestions from './data/item_suggestions.json'
 
-const LOCATION_OPTIONS = Object.keys(locationAliases || {}).sort((a, b) => a.localeCompare(b))
-const DROP_OFF_OPTIONS = ['Keystone', 'Love Fridge', 'NWMA', 'Urban Canopy']
+const LOCATION_OPTIONS = Array.isArray(rescueLocations) ? rescueLocations : []
+const DROP_OFF_OPTIONS = Array.isArray(dropOffLocations) ? dropOffLocations : []
 
 // Normalize item suggestions to dedupe variations like "apple", "apples", "box of apples"
 const normalizeItemName = (name) => {
@@ -1479,9 +1481,15 @@ function App() {
     }
 
     // Generate Slack message for copying
-    const locationStr = loggingFormData.locations.join(', ')
+    const formatLocationList = (locs) => {
+      if (locs.length === 0) return ''
+      if (locs.length === 1) return locs[0]
+      if (locs.length === 2) return `${locs[0]} and ${locs[1]}`
+      return `${locs.slice(0, -1).join(', ')}, and ${locs[locs.length - 1]}`
+    }
+    const locationStr = formatLocationList(loggingFormData.locations)
     const dropOffStr = loggingFormData.dropOffs.length > 0
-      ? `\nDropped off at: ${loggingFormData.dropOffs.join(', ')}`
+      ? `\nDropped off at ${formatLocationList(loggingFormData.dropOffs)}`
       : ''
     const itemLines = items.map(item => {
       const qty = item.quantity || ''

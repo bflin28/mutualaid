@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { fetchSlackMessage } from './lib/slackBrowserApi'
 import { saveRescueLog } from './lib/slackAuditApi'
-import locationAliases from './data/location_aliases.json'
+import rescueLocations from './data/rescue_locations.json'
+import dropOffLocations from './data/drop_off_locations.json'
 
 // API base for reviewed messages tracking (main server)
 const MAIN_API_BASE = '/api'
@@ -32,8 +33,8 @@ const markAsReviewed = async (ids) => {
   }
 }
 
-const LOCATION_OPTIONS = Object.keys(locationAliases || {}).sort((a, b) => a.localeCompare(b))
-const DROP_OFF_OPTIONS = ['Keystone', 'Love Fridge', 'NWMA', 'Urban Canopy']
+const LOCATION_OPTIONS = Array.isArray(rescueLocations) ? rescueLocations : []
+const DROP_OFF_OPTIONS = Array.isArray(dropOffLocations) ? dropOffLocations : []
 const SUBCATEGORY_OPTIONS = ['produce', 'grain', 'meat', 'drinks', 'snacks', 'dry goods', 'dairy']
 const UNIT_OPTIONS = [
   'cases', 'boxes', 'bags', 'lbs', 'pallets (full)', 'pallets (small)',
