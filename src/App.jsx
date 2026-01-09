@@ -544,6 +544,7 @@ function App() {
     locations: [],
     dropOffs: [],
     date: todayDateString(),
+    rescued_by: '',
     items: [{
       name: '',
       quantity: '',
@@ -1469,6 +1470,7 @@ function App() {
       location: loggingFormData.locations.join(', '),
       drop_off: loggingFormData.dropOffs.join(', '),
       rescued_at: loggingFormData.date,
+      rescued_by: loggingFormData.rescued_by || null,
       items,
       source: 'manual',
     }
@@ -1511,6 +1513,7 @@ function App() {
       locations: [],
       dropOffs: [],
       date: todayDateString(),
+      rescued_by: '',
       items: [{
         name: '',
         quantity: '',
@@ -2456,6 +2459,18 @@ function App() {
                     type="date"
                     value={loggingFormData.date}
                     onChange={(e) => setLoggingFormData(prev => ({ ...prev, date: e.target.value }))}
+                  />
+                </label>
+              </div>
+
+              <div className="form-row">
+                <label className="full-width">
+                  <span>Your Name</span>
+                  <input
+                    type="text"
+                    value={loggingFormData.rescued_by}
+                    onChange={(e) => setLoggingFormData(prev => ({ ...prev, rescued_by: e.target.value }))}
+                    placeholder="Who did this rescue?"
                   />
                 </label>
               </div>

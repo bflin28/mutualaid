@@ -19,6 +19,9 @@ ALTER TABLE rescue_logs ADD COLUMN IF NOT EXISTS drop_off TEXT;
 -- Add source column to track where the entry came from (manual, slack_import)
 ALTER TABLE rescue_logs ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual';
 
+-- Add rescued_by column to track who did the rescue
+ALTER TABLE rescue_logs ADD COLUMN IF NOT EXISTS rescued_by TEXT;
+
 -- Index for querying by location
 CREATE INDEX IF NOT EXISTS idx_rescue_logs_location ON rescue_logs(location);
 

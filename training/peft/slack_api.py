@@ -713,6 +713,7 @@ def create_rescue_log(payload: Dict[str, Any]):
       "location": payload.get("location"),
       "drop_off": payload.get("drop_off"),
       "rescued_at": payload.get("rescued_at"),
+      "rescued_by": payload.get("rescued_by"),
       "items": items_with_weights,
       "total_estimated_lbs": round(total_lbs, 1) if total_lbs > 0 else None,
       "notes": payload.get("notes"),
