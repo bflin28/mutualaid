@@ -334,6 +334,7 @@ const getRecordRawText = (record) => {
 function TagInput({ tags, setTags, suggestions = [], placeholder = 'Type and press Enter' }) {
   const [inputValue, setInputValue] = useState('')
   const [showSuggestions, setShowSuggestions] = useState(false)
+  const [editingIndex, setEditingIndex] = useState(null)
   const inputRef = useRef(null)
 
   const filteredSuggestions = useMemo(() => {
@@ -357,6 +358,20 @@ function TagInput({ tags, setTags, suggestions = [], placeholder = 'Type and pre
     setTags(tags.filter(t => t !== tagToRemove))
   }
 
+  const startEditing = (index) => {
+    setEditingIndex(index)
+  }
+
+  const finishEditing = (index, newValue) => {
+    const trimmed = newValue.trim()
+    if (trimmed && trimmed !== tags[index]) {
+      const newTags = [...tags]
+      newTags[index] = trimmed
+      setTags(newTags)
+    }
+    setEditingIndex(null)
+  }
+
   const handleKeyDown = (e) => {
     if (e.key === 'Enter') {
       e.preventDefault()
@@ -368,14 +383,42 @@ function TagInput({ tags, setTags, suggestions = [], placeholder = 'Type and pre
     }
   }
 
+  const handleBlur = () => {
+    setTimeout(() => {
+      setShowSuggestions(false)
+      if (inputValue.trim()) {
+        addTag(inputValue)
+      }
+    }, 150)
+  }
+
   return (
     <div className="tag-input-container">
       <div className="tag-input-tags">
         {tags.map((tag, idx) => (
-          <span key={idx} className="tag-input-tag">
-            {tag}
-            <button type="button" className="tag-input-remove" onClick={() => removeTag(tag)}>×</button>
-          </span>
+          editingIndex === idx ? (
+            <input
+              key={idx}
+              type="text"
+              defaultValue={tag}
+              autoFocus
+              className="tag-input-edit"
+              onBlur={(e) => finishEditing(idx, e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault()
+                  finishEditing(idx, e.target.value)
+                } else if (e.key === 'Escape') {
+                  setEditingIndex(null)
+                }
+              }}
+            />
+          ) : (
+            <span key={idx} className="tag-input-tag" onClick={() => startEditing(idx)}>
+              {tag}
+              <button type="button" className="tag-input-remove" onClick={(e) => { e.stopPropagation(); removeTag(tag) }}>×</button>
+            </span>
+          )
         ))}
         <input
           ref={inputRef}
@@ -387,7 +430,7 @@ function TagInput({ tags, setTags, suggestions = [], placeholder = 'Type and pre
           }}
           onKeyDown={handleKeyDown}
           onFocus={() => setShowSuggestions(true)}
-          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+          onBlur={handleBlur}
           placeholder={tags.length === 0 ? placeholder : ''}
           className="tag-input-field"
         />

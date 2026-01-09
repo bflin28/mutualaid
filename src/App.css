@@ -1531,6 +1531,23 @@
   font-size: 0.9rem;
   font-weight: 500;
   border: 1px solid #bbf7d0;
+  cursor: pointer;
+}
+
+.tag-input-tag:hover {
+  background: #dcfce7;
+}
+
+.tag-input-edit {
+  padding: 0.35rem 0.65rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  border: 1px solid #16a34a;
+  background: white;
+  color: #166534;
+  outline: none;
+  min-width: 80px;
 }
 
 .tag-input-remove {
