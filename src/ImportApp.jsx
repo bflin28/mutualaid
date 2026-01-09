@@ -3,11 +3,41 @@ import { fetchSlackMessage } from './lib/slackBrowserApi'
 import { saveRescueLog } from './lib/slackAuditApi'
 import locationAliases from './data/location_aliases.json'
 
+// API base for reviewed messages tracking (main server)
+const MAIN_API_BASE = '/api'
+
+// Fetch reviewed message IDs from server
+const fetchReviewedIds = async () => {
+  try {
+    const resp = await fetch(`${MAIN_API_BASE}/import/reviewed`)
+    if (!resp.ok) return []
+    const json = await resp.json()
+    return json.data?.ids || []
+  } catch {
+    return []
+  }
+}
+
+// Mark message IDs as reviewed
+const markAsReviewed = async (ids) => {
+  try {
+    const resp = await fetch(`${MAIN_API_BASE}/import/reviewed`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ids: Array.isArray(ids) ? ids : [ids] }),
+    })
+    return resp.ok
+  } catch {
+    return false
+  }
+}
+
 const LOCATION_OPTIONS = Object.keys(locationAliases || {}).sort((a, b) => a.localeCompare(b))
 const SUBCATEGORY_OPTIONS = ['produce', 'grain', 'meat', 'drinks', 'snacks', 'dry goods', 'dairy']
 const UNIT_OPTIONS = [
   'cases', 'boxes', 'bags', 'lbs', 'pallets (full)', 'pallets (small)',
   'crates', 'flats', 'items', 'dozen', 'each', 'gallons', 'packages', 'sacks',
+  'loaves', 'gaylords',
 ]
 
 // Tag input component for multi-value fields
@@ -206,6 +236,13 @@ function getRawText(record) {
   return record.raw_text || record.raw_message || ''
 }
 
+// Get a unique ID for a record (Slack browser API uses message_key or ts)
+function getRecordId(record) {
+  if (!record) return null
+  // Try various ID fields that the Slack browser API might use
+  return record.message_key || record.id || record.ts || record.slack_ts || null
+}
+
 // Group consecutive messages from the same user within a time window
 function groupConsecutiveMessages(records, windowMinutes = 60) {
   if (!records.length) return []
@@ -245,8 +282,11 @@ function groupConsecutiveMessages(records, windowMinutes = 60) {
         current.drop_off_location = record.drop_off_location
       }
 
-      // Track all merged IDs
-      current._mergedIds = [...(current._mergedIds || [current.id]), record.id]
+      // Track all merged IDs using getRecordId
+      const recordId = getRecordId(record)
+      if (recordId) {
+        current._mergedIds = [...(current._mergedIds || []), recordId]
+      }
 
       // Use earlier timestamp as start
       if (recordTime < new Date(current.start_ts)) {
@@ -257,10 +297,11 @@ function groupConsecutiveMessages(records, windowMinutes = 60) {
       if (current) {
         grouped.push(current)
       }
+      const recordId = getRecordId(record)
       current = {
         ...record,
         raw_messages: record.raw_messages || [record.raw_text || record.raw_message || ''],
-        _mergedIds: [record.id],
+        _mergedIds: recordId ? [recordId] : [],
       }
     }
   }
@@ -296,6 +337,10 @@ function ImportApp() {
     setLoading(true)
     setError('')
 
+    // Fetch reviewed message IDs first
+    const reviewedIds = await fetchReviewedIds()
+    const reviewedSet = new Set(reviewedIds)
+
     const { data, error: err } = await fetchSlackMessage({
       start: 0,
       limit: 5000,
@@ -318,11 +363,20 @@ function ImportApp() {
     // Group consecutive messages and sort by most recent
     const grouped = groupConsecutiveMessages(withContent, 60)
 
-    setMessages(grouped)
+    // Filter out already-reviewed messages
+    const notReviewed = grouped.filter(rec => {
+      // Check if any merged IDs are reviewed (all IDs are now in _mergedIds)
+      if (Array.isArray(rec._mergedIds) && rec._mergedIds.length > 0) {
+        if (rec._mergedIds.some(id => id && reviewedSet.has(id))) return false
+      }
+      return true
+    })
+
+    setMessages(notReviewed)
     setLoading(false)
 
-    if (grouped.length > 0) {
-      populateForm(grouped[0])
+    if (notReviewed.length > 0) {
+      populateForm(notReviewed[0])
     }
   }
 
@@ -352,12 +406,32 @@ function ImportApp() {
   const goNext = () => goToMessage(currentIndex + 1)
   const goPrev = () => goToMessage(currentIndex - 1)
 
-  // Skip current message (just move to next)
-  const handleSkip = () => {
-    if (currentIndex < messages.length - 1) {
-      goNext()
+  // Skip current message (mark as reviewed and move to next)
+  const handleSkip = async () => {
+    const currentRecord = messages[currentIndex]
+
+    // All IDs are stored in _mergedIds
+    const idsToMark = Array.isArray(currentRecord?._mergedIds)
+      ? currentRecord._mergedIds.filter(Boolean)
+      : []
+
+    // Mark as reviewed in the background
+    if (idsToMark.length > 0) {
+      markAsReviewed(idsToMark)
+    }
+
+    // Remove from current list and move to next
+    setMessages(prev => prev.filter((_, i) => i !== currentIndex))
+
+    if (currentIndex >= messages.length - 1) {
+      if (messages.length <= 1) {
+        setSaveStatus({ state: 'info', message: 'No more messages to review' })
+      } else {
+        setCurrentIndex(Math.max(0, currentIndex - 1))
+        populateForm(messages[currentIndex - 1])
+      }
     } else {
-      setSaveStatus({ state: 'info', message: 'No more messages to review' })
+      populateForm(messages[currentIndex + 1])
     }
   }
 
@@ -419,7 +493,7 @@ function ImportApp() {
         unit: item.unit || null,
         subcategory: item.subcategory || null,
       })),
-      source: 'slack_import',
+      source: 'slack',
     }
 
     const { error: err } = await saveRescueLog(payload)
@@ -430,6 +504,15 @@ function ImportApp() {
     }
 
     setSaveStatus({ state: 'saved', message: 'Saved!' })
+
+    // Mark as reviewed - all IDs are stored in _mergedIds
+    const currentRecord = messages[currentIndex]
+    const idsToMark = Array.isArray(currentRecord?._mergedIds)
+      ? currentRecord._mergedIds.filter(Boolean)
+      : []
+    if (idsToMark.length > 0) {
+      markAsReviewed(idsToMark)
+    }
 
     // Remove from list and move to next
     setTimeout(() => {

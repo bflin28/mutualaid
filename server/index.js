@@ -3,7 +3,17 @@ import './loadEnv.js'
 
 import express from 'express'
 import { randomUUID } from 'node:crypto'
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs'
+import { join, dirname } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import cors from 'cors'
+
+// For ES modules, get __dirname equivalent
+const __filename = fileURLToPath(import.meta.url)
+const __dirname = dirname(__filename)
+
+// File path for storing reviewed message IDs
+const REVIEWED_MESSAGES_FILE = join(__dirname, '..', 'data', 'reviewed_messages.json')
 import { createClient } from '@supabase/supabase-js'
 import { normalizeFoodLogText } from './foodLogParser.js'
 import { emptyTotals, formatNormalizedSummary, mergeTotals, postSlackMessage } from './slackUtils.js'
@@ -348,6 +358,81 @@ const resolveOccurrenceDate = (payload = {}) => {
 
 app.get('/api/health', (_req, res) => {
   res.json({ ok: true })
+})
+
+// --- Reviewed Messages Tracking ---
+// Helper to load reviewed message IDs from file
+const loadReviewedMessages = () => {
+  try {
+    if (!existsSync(REVIEWED_MESSAGES_FILE)) {
+      return { ids: [], updatedAt: null }
+    }
+    const content = readFileSync(REVIEWED_MESSAGES_FILE, 'utf-8')
+    const data = JSON.parse(content)
+    return {
+      ids: Array.isArray(data.ids) ? data.ids : [],
+      updatedAt: data.updatedAt || null,
+    }
+  } catch (err) {
+    console.warn('Failed to load reviewed messages:', err.message)
+    return { ids: [], updatedAt: null }
+  }
+}
+
+// Helper to save reviewed message IDs to file
+const saveReviewedMessages = (ids) => {
+  try {
+    // Ensure data directory exists
+    const dataDir = dirname(REVIEWED_MESSAGES_FILE)
+    if (!existsSync(dataDir)) {
+      mkdirSync(dataDir, { recursive: true })
+    }
+    const data = {
+      ids: Array.isArray(ids) ? [...new Set(ids)] : [],
+      updatedAt: new Date().toISOString(),
+    }
+    writeFileSync(REVIEWED_MESSAGES_FILE, JSON.stringify(data, null, 2), 'utf-8')
+    return { success: true }
+  } catch (err) {
+    console.error('Failed to save reviewed messages:', err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+// GET /api/import/reviewed - Get list of reviewed message IDs
+app.get('/api/import/reviewed', (_req, res) => {
+  const data = loadReviewedMessages()
+  res.json({ data })
+})
+
+// POST /api/import/reviewed - Add message IDs to reviewed list
+app.post('/api/import/reviewed', (req, res) => {
+  const idsToAdd = Array.isArray(req.body?.ids) ? req.body.ids : []
+  if (idsToAdd.length === 0) {
+    res.status(400).json({ error: 'ids array is required' })
+    return
+  }
+
+  const current = loadReviewedMessages()
+  const newIds = [...new Set([...current.ids, ...idsToAdd])]
+  const result = saveReviewedMessages(newIds)
+
+  if (!result.success) {
+    res.status(500).json({ error: result.error || 'Failed to save' })
+    return
+  }
+
+  res.json({ data: { added: idsToAdd.length, total: newIds.length } })
+})
+
+// DELETE /api/import/reviewed - Clear all reviewed message IDs
+app.delete('/api/import/reviewed', (_req, res) => {
+  const result = saveReviewedMessages([])
+  if (!result.success) {
+    res.status(500).json({ error: result.error || 'Failed to clear' })
+    return
+  }
+  res.json({ data: { cleared: true } })
 })
 
 // Warehouse logs with item rows for frontend consumption

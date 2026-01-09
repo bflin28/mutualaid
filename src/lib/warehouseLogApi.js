@@ -50,8 +50,8 @@ const putJson = async (path, body) => {
   }
 }
 
-export const fetchWarehouseLogs = async () => {
-  const params = new URLSearchParams({ backfill: '1', history_limit: '20' })
+export const fetchWarehouseLogs = async ({ limit = 500 } = {}) => {
+  const params = new URLSearchParams({ limit: String(limit) })
   const { data, error } = await getJson(`/api/warehouse/logs?${params.toString()}`)
   return { data: data || [], error }
 }

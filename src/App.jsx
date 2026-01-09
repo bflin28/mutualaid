@@ -1,5 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
+
+// Lucide Icons
+import { Leaf, FileText, BarChart3, Menu, X } from 'lucide-react'
+
+// UI Components
+import { Badge } from './components/ui/badge'
 import { submitPickupSignup, createEvent as createEventApi, fetchApprovedEvents, triggerSlackAlert } from './lib/pickupApi'
 import { fetchWarehouseLogs, previewWarehouseLog, saveWarehouseLog, updateWarehouseLogItems } from './lib/warehouseLogApi'
 import { fetchSlackMessage, searchSlackMessages, fetchSlackMessageById } from './lib/slackBrowserApi'
@@ -257,7 +263,7 @@ const resolveLocationLabel = (value) => {
 
 const getRecordTimestamp = (record) => {
   if (!record) return null
-  const candidate = record.start_ts || record.slack_sent_at || record.created_at || record.audited_at
+  const candidate = record.rescued_at || record.start_ts || record.slack_sent_at || record.created_at || record.audited_at
   if (!candidate) return null
   if (candidate instanceof Date) {
     return Number.isNaN(candidate.getTime()) ? null : candidate.getTime()
@@ -402,6 +408,7 @@ function TagInput({ tags, setTags, suggestions = [], placeholder = 'Type and pre
 
 function App() {
   const [currentView, setCurrentView] = useState('logging')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
   const [isLoggedIn, setIsLoggedIn] = useState(false)
   const [selectedPickup, setSelectedPickup] = useState(null)
   const [events, setEvents] = useState([])
@@ -545,19 +552,15 @@ function App() {
   const [loggingFormStatus, setLoggingFormStatus] = useState({ state: 'idle', message: '' })
   const [expandedItemIndex, setExpandedItemIndex] = useState(0) // Track which item is expanded for editing
   const [activityLimit, setActivityLimit] = useState(10) // How many recent activities to show
+  const [expandedActivityId, setExpandedActivityId] = useState(null) // Track which activity row is expanded
 
   // Callback to load audited stats (extracted for reuse)
   const loadAuditedStats = useCallback(async () => {
     setAuditedLoading(true)
     setAuditedError('')
-    const { data, error } = await fetchSlackMessage({
-      auditFilter: 'audited',
-      start: 0,
-      limit: 5000,
-      includeRecurring: true,
-    })
+    const { data, error } = await fetchWarehouseLogs({ limit: 500 })
     if (error || !data) {
-      setAuditedError(error?.message || 'Could not load audited messages.')
+      setAuditedError(error?.message || 'Could not load rescue logs.')
       setAuditedStats({
         total: 0,
         items: [],
@@ -567,47 +570,34 @@ function App() {
         records: [],
       })
     } else {
-      const allRecords = Array.isArray(data.records) ? data.records : []
-      const regularRecords = allRecords.filter(r => !r.recurring)
-      const recurringEventsAll = allRecords.filter(r => r.recurring)
+      // Data comes from rescue_logs table with fields: id, location, drop_off_location, items, created_at, source, raw_text
+      const records = Array.isArray(data) ? data : []
 
-      const defaultStartDate = new Date()
-      defaultStartDate.setDate(defaultStartDate.getDate() - 90)
-      const virtualRecords = recurringEventsAll.flatMap(event =>
-        generateVirtualRecordsFromRecurring(
-          event,
-          defaultStartDate.toISOString().slice(0, 10),
-          new Date().toISOString().slice(0, 10)
-        )
-      )
-
-      const records = [...regularRecords, ...virtualRecords]
       const items = []
       const byLocationMap = new Map()
       const bySubcategoryMap = new Map()
       let totalLbs = 0
+
       records.forEach((rec) => {
-        const cards = buildAuditedCards(rec)
-        cards.forEach((card) => {
-          const locKey = card.location || 'unknown'
-          const cardItems = Array.isArray(card.items) ? card.items : []
-          cardItems.forEach((it) => {
-            items.push(it)
-            const lbs = getItemWeight(it)
-            totalLbs += lbs
-            byLocationMap.set(locKey, (byLocationMap.get(locKey) || 0) + lbs)
-            const sub = (it.subcategory || '').trim() || 'Uncategorized'
-            bySubcategoryMap.set(sub, (bySubcategoryMap.get(sub) || 0) + lbs)
-          })
+        const locKey = rec.location || 'Unknown'
+        const recItems = Array.isArray(rec.items) ? rec.items : []
+        recItems.forEach((it) => {
+          items.push(it)
+          const lbs = getItemWeight(it)
+          totalLbs += lbs
+          byLocationMap.set(locKey, (byLocationMap.get(locKey) || 0) + lbs)
+          const sub = (it.subcategory || '').trim() || 'Uncategorized'
+          bySubcategoryMap.set(sub, (bySubcategoryMap.get(sub) || 0) + lbs)
         })
       })
+
       const byLocation = Array.from(byLocationMap.entries()).map(([name, lbs]) => ({ name, lbs }))
         .sort((a, b) => b.lbs - a.lbs)
       const bySubcategory = Array.from(bySubcategoryMap.entries()).map(([name, lbs]) => ({ name, lbs }))
         .sort((a, b) => b.lbs - a.lbs)
 
-      setAuditedStats({ total: records.length, items, byLocation, bySubcategory, totalLbs, records: regularRecords })
-      setRecurringEvents(recurringEventsAll)
+      setAuditedStats({ total: records.length, items, byLocation, bySubcategory, totalLbs, records })
+      setRecurringEvents([]) // No recurring events in rescue_logs for now
     }
     setAuditedLoading(false)
   }, [])
@@ -2333,38 +2323,90 @@ function App() {
     setCurrentView('food-pickup')
   }
 
-  return (
-    <div className="app">
-      <header className="header modern-header">
-        <div className="header-content">
-          <div className="header-branding">
-            <div className="brand-icon">🥬</div>
-            <div className="brand-text">
-              <h1>Chicago Food Sovereignty Coalition</h1>
-            </div>
+  const sidebarContent = (
+    <>
+      <div className="p-6 border-b border-gray-200">
+        <div className="flex items-center gap-3">
+          <div className="p-2 bg-green-600 rounded-lg">
+            <Leaf className="w-6 h-6 text-white" />
           </div>
-          <div className="header-tabs">
-            <button
-              className={`header-tab ${currentView === 'logging' ? 'active' : ''}`}
-              type="button"
-              onClick={showLogging}
-            >
-              <span className="tab-icon">📝</span>
-              <span className="tab-label">Log Rescue</span>
-            </button>
-            <button
-              className={`header-tab ${currentView === 'audited-stats' ? 'active' : ''}`}
-              type="button"
-              onClick={showAuditedTab}
-            >
-              <span className="tab-icon">📊</span>
-              <span className="tab-label">View Stats</span>
-            </button>
+          <div>
+            <h1 className="text-gray-900 font-semibold">Chicago Food</h1>
+            <h1 className="text-gray-900 font-semibold">Sovereignty</h1>
           </div>
         </div>
-      </header>
+      </div>
+      <nav className="flex-1 p-4 space-y-1">
+        <button
+          onClick={() => {
+            showLogging()
+            setSidebarOpen(false)
+          }}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            currentView === 'logging'
+              ? 'bg-green-50 text-green-700 border border-green-200'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+          }`}
+        >
+          <FileText className="w-5 h-5" />
+          <span>Log Rescue</span>
+        </button>
+        <button
+          onClick={() => {
+            showAuditedTab()
+            setSidebarOpen(false)
+          }}
+          className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-colors ${
+            currentView === 'audited-stats'
+              ? 'bg-green-50 text-green-700 border border-green-200'
+              : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+          }`}
+        >
+          <BarChart3 className="w-5 h-5" />
+          <span>View Stats</span>
+        </button>
+      </nav>
+    </>
+  )
 
-      <main className="main-content">
+  return (
+    <div className="min-h-screen bg-gray-50 flex">
+      {/* Mobile Header */}
+      <div className="md:hidden fixed top-0 left-0 right-0 z-50 bg-white border-b border-gray-200 px-4 py-3 flex items-center gap-3">
+        <button
+          aria-label="open sidebar"
+          onClick={() => setSidebarOpen(true)}
+          className="p-2 hover:bg-gray-100 rounded-lg"
+        >
+          <Menu className="w-6 h-6 text-gray-700" />
+        </button>
+        <span className="font-semibold text-gray-900">Food Sovereignty</span>
+      </div>
+
+      {/* Mobile Sidebar Overlay */}
+      {sidebarOpen && (
+        <div className="md:hidden fixed inset-0 z-50">
+          <div className="fixed inset-0 bg-black/50" onClick={() => setSidebarOpen(false)} />
+          <aside className="fixed left-0 top-0 bottom-0 w-64 bg-white flex flex-col shadow-lg">
+            <button
+              className="absolute top-4 right-4 p-1 hover:bg-gray-100 rounded"
+              onClick={() => setSidebarOpen(false)}
+            >
+              <X className="w-5 h-5 text-gray-500" />
+            </button>
+            {sidebarContent}
+          </aside>
+        </div>
+      )}
+
+      {/* Desktop Sidebar */}
+      <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col fixed left-0 top-0 bottom-0">
+        {sidebarContent}
+      </aside>
+
+      {/* Main Content */}
+      <main className="flex-1 md:ml-64 mt-14 md:mt-0 overflow-auto bg-gray-50 min-h-screen">
+        <div className="max-w-4xl mx-auto p-6">
         {currentView === 'logging' && (
           <div className="logging">
             <div className="logging-form card">
@@ -2612,55 +2654,134 @@ function App() {
             {auditedError && <div className="error-text">{auditedError}</div>}
 
             {/* Recent Activity Feed */}
-            <div className="activity-feed">
-              <h3 className="activity-feed-title">Recent Activity</h3>
-              {recentActivity.length === 0 && !auditedLoading && (
-                <p className="activity-empty">No rescue activity yet.</p>
+            <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm mb-6">
+              <div className="px-4 py-3 border-b border-gray-200">
+                <h3 className="text-xs font-medium text-gray-500 uppercase tracking-wider">Recent Activity</h3>
+              </div>
+              {recentActivity.length === 0 && !auditedLoading ? (
+                <div className="p-8 text-center text-gray-500">
+                  No rescue activity yet.
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
+                      <tr className="border-b border-gray-200 bg-gray-50">
+                        <th className="text-left text-xs font-medium text-gray-600 px-4 py-3">Date</th>
+                        <th className="text-left text-xs font-medium text-gray-600 px-4 py-3">Location</th>
+                        <th className="text-left text-xs font-medium text-gray-600 px-4 py-3">Drop Off</th>
+                        <th className="text-right text-xs font-medium text-gray-600 px-4 py-3">Weight</th>
+                        <th className="text-right text-xs font-medium text-gray-600 px-4 py-3">Items</th>
+                        <th className="text-left text-xs font-medium text-gray-600 px-4 py-3">Source</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {recentActivity.slice(0, activityLimit).map((rec, idx) => {
+                        const rowId = rec.id || `activity-${idx}`
+                        const isExpanded = expandedActivityId === rowId
+                        const ts = getRecordTimestamp(rec)
+                        const date = ts ? new Date(ts) : null
+                        const dateStr = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
+                        const fromLoc = rec.location || 'Unknown'
+                        const toLoc = rec.drop_off_location || '—'
+                        // Items come directly from rescue_logs record
+                        const allItems = Array.isArray(rec.items) ? rec.items : []
+                        let totalLbs = 0
+                        allItems.forEach((it) => {
+                          totalLbs += getItemWeight(it)
+                        })
+                        const sourceLabel = rec.source === 'manual' ? 'Manual' : 'Slack'
+                        const badgeVariant = rec.source === 'manual' ? 'green' : 'secondary'
+                        const rawText = rec.raw_text || ''
+                        const isSlackSource = rec.source !== 'manual'
+
+                        return (
+                          <Fragment key={rowId}>
+                            <tr
+                              className={`border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer ${isExpanded ? 'bg-gray-50' : ''}`}
+                              onClick={() => setExpandedActivityId(isExpanded ? null : rowId)}
+                            >
+                              <td className="px-4 py-3 text-sm text-gray-500">{dateStr}</td>
+                              <td className="px-4 py-3 text-sm font-medium text-gray-900">{fromLoc}</td>
+                              <td className="px-4 py-3 text-sm text-gray-500">{toLoc}</td>
+                              <td className="px-4 py-3 text-sm font-semibold text-gray-900 text-right">{totalLbs.toFixed(0)} lbs</td>
+                              <td className="px-4 py-3 text-sm text-gray-500 text-right">{allItems.length}</td>
+                              <td className="px-4 py-3">
+                                <Badge variant={badgeVariant}>{sourceLabel}</Badge>
+                              </td>
+                            </tr>
+                            {isExpanded && (
+                              <tr>
+                                <td colSpan={6} className="px-4 py-4 bg-gray-50 border-b border-gray-200">
+                                  {/* Show raw message for Slack source */}
+                                  {isSlackSource && rawText && (
+                                    <div className="mb-4">
+                                      <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Original Message</h4>
+                                      <div className="bg-white border border-gray-200 rounded-lg p-3 text-sm text-gray-700 whitespace-pre-wrap max-h-48 overflow-y-auto">
+                                        {rawText}
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Items list */}
+                                  <h4 className="text-xs font-medium text-gray-500 uppercase tracking-wider mb-2">Items ({allItems.length})</h4>
+                                  {allItems.length > 0 ? (
+                                    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden">
+                                      <table className="w-full text-sm">
+                                        <thead>
+                                          <tr className="bg-gray-100 border-b border-gray-200">
+                                            <th className="text-left px-3 py-2 font-medium text-gray-600">Item</th>
+                                            <th className="text-right px-3 py-2 font-medium text-gray-600">Qty</th>
+                                            <th className="text-left px-3 py-2 font-medium text-gray-600">Unit</th>
+                                            <th className="text-left px-3 py-2 font-medium text-gray-600">Category</th>
+                                            <th className="text-right px-3 py-2 font-medium text-gray-600">Weight</th>
+                                          </tr>
+                                        </thead>
+                                        <tbody>
+                                          {allItems.map((item, itemIdx) => {
+                                            const name = item.name || item.item_name || 'Unknown'
+                                            const qty = item.quantity ?? item.qty ?? '—'
+                                            const unit = item.unit || item.container || '—'
+                                            const category = item.subcategory ? formatSubcategoryLabel(String(item.subcategory)) : '—'
+                                            const weight = getItemWeight(item)
+                                            return (
+                                              <tr key={itemIdx} className="border-b border-gray-100 last:border-b-0">
+                                                <td className="px-3 py-2 text-gray-900">{name}</td>
+                                                <td className="px-3 py-2 text-gray-600 text-right">{qty}</td>
+                                                <td className="px-3 py-2 text-gray-600">{unit}</td>
+                                                <td className="px-3 py-2 text-gray-600">{category}</td>
+                                                <td className="px-3 py-2 text-gray-900 font-medium text-right">{weight.toFixed(1)} lbs</td>
+                                              </tr>
+                                            )
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  ) : (
+                                    <div className="bg-white border border-gray-200 rounded-lg p-4 text-sm text-gray-500 text-center">
+                                      No items recorded.
+                                    </div>
+                                  )}
+                                </td>
+                              </tr>
+                            )}
+                          </Fragment>
+                        )
+                      })}
+                    </tbody>
+                  </table>
+                </div>
               )}
-              {recentActivity.slice(0, activityLimit).map((rec) => {
-                const ts = getRecordTimestamp(rec)
-                const date = ts ? new Date(ts) : null
-                const dateStr = date ? date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '—'
-                const fromLoc = rec.rescue_location_canonical || collectRescueLocations(rec)[0] || 'Unknown'
-                const toLoc = rec.drop_off_location_canonical || rec.drop_off_location || ''
-                const cards = buildAuditedCards(rec)
-                let totalLbs = 0
-                let itemCount = 0
-                cards.forEach((card) => {
-                  const cardItems = Array.isArray(card.items) ? card.items : []
-                  cardItems.forEach((it) => {
-                    totalLbs += getItemWeight(it)
-                    itemCount += 1
-                  })
-                })
-                const sourceLabel = rec.source === 'slack_import' ? 'Import'
-                  : rec.source === 'manual' ? 'Manual'
-                  : 'Slack'
-                const sourceClass = rec.source === 'slack_import' ? 'source-import'
-                  : rec.source === 'manual' ? 'source-manual'
-                  : 'source-slack'
-                return (
-                  <div key={rec.id || rec.message_key} className="activity-row">
-                    <span className="activity-date">{dateStr}</span>
-                    <span className="activity-location">
-                      <span className="activity-from">{fromLoc}</span>
-                      {toLoc && <span className="activity-arrow">→</span>}
-                      {toLoc && <span className="activity-to">{toLoc}</span>}
-                    </span>
-                    <span className="activity-weight">{totalLbs.toFixed(0)} lbs</span>
-                    <span className="activity-items">{itemCount} items</span>
-                    <span className={`activity-source ${sourceClass}`}>{sourceLabel}</span>
-                  </div>
-                )
-              })}
               {recentActivity.length > activityLimit && (
-                <button
-                  className="activity-show-more"
-                  type="button"
-                  onClick={() => setActivityLimit(prev => prev + 10)}
-                >
-                  Show more ({recentActivity.length - activityLimit} remaining)
-                </button>
+                <div className="px-4 py-3 text-center border-t border-gray-100">
+                  <button
+                    className="text-sm text-green-600 hover:text-green-700 font-medium"
+                    type="button"
+                    onClick={() => setActivityLimit(prev => prev + 10)}
+                  >
+                    Show more ({recentActivity.length - activityLimit} remaining)
+                  </button>
+                </div>
               )}
             </div>
 
@@ -3134,116 +3255,6 @@ function App() {
               )}
             </div>
 
-            {!selectedAuditedLocation && (
-              <div className="audited-records">
-                <div className="audited-records-header">
-                  <h3>Audited messages</h3>
-                  <p>Chronological list of audited messages used in stats.</p>
-                </div>
-              {auditedLoading && <div className="loading">Loading audited messages...</div>}
-              {!auditedLoading && !sortedAuditedRecords.length && (
-                <div className="empty-state">
-                  <p>No audited messages for this range yet.</p>
-                </div>
-              )}
-              {!auditedLoading && sortedAuditedRecords.length > 0 && (
-                <div className="delivery-table">
-                  <div className="delivery-head">
-                    <div className="col date">Rescue date</div>
-                    <div className="col from">Rescued from</div>
-                    <div className="col weight">Rescued weight</div>
-                    <div className="col items">Cards</div>
-                  </div>
-                  {sortedAuditedRecords.map((record, idx) => {
-                    const rowId = auditedRecordRowId(record, idx)
-                    const isExpanded = expandedAuditedId === rowId
-                    const cards = buildAuditedCards(record)
-                    const items = cards.flatMap((card) => (Array.isArray(card.items) ? card.items : []))
-                    const weightTotal = totalRescuedWeight(items)
-                    const cardLocations = Array.from(new Set(cards.map((card) => card.location).filter(Boolean)))
-                    const locationLabel = cardLocations[0] || 'Unknown location'
-                    const locationSuffix = cardLocations.length > 1 ? ` +${cardLocations.length - 1}` : ''
-                    const locationTitle = cardLocations.length > 1 ? cardLocations.join(', ') : undefined
-                    return (
-                      <div key={rowId}>
-                        <div
-                          className={`delivery-row ${isExpanded ? 'expanded' : ''}`}
-                          onClick={() => setExpandedAuditedId((prev) => (prev === rowId ? null : rowId))}
-                        >
-                          <div className="col date">{formatRecordDate(record)}</div>
-                          <div className="col from">
-                            <span className="delivery-pill" title={locationTitle}>{locationLabel}{locationSuffix}</span>
-                          </div>
-                          <div className="col weight">{weightTotal ? `${Math.round(weightTotal)} lbs` : '—'}</div>
-                          <div className="col items">
-                            <span className="delivery-items-inline">Cards ({cards.length})</span>
-                          </div>
-                        </div>
-                        {isExpanded && (
-                          <div className="delivery-items-editor" onClick={(e) => e.stopPropagation()}>
-                            <div className="delivery-message">
-                              <p>{getRecordRawText(record)}</p>
-                            </div>
-                            {cards.length ? (
-                              cards.map((card, cardIdx) => {
-                                const cardItems = Array.isArray(card.items) ? card.items : []
-                                const cardWeight = totalRescuedWeight(cardItems)
-                                const cardLocation = card.location || 'Unknown location'
-                                return (
-                                  <details className="delivery-items-accordion audited-card" key={`${rowId}-${card.key || cardIdx}`} open>
-                                    <summary>
-                                      {`Card ${cardIdx + 1} - ${cardLocation} - Items (${cardItems.length}) - ${cardWeight.toFixed(1)} lbs`}
-                                    </summary>
-                                    <div className="items-editor">
-                                      <div className="items-head">
-                                        <div>Item</div>
-                                        <div>Qty</div>
-                                        <div>Unit</div>
-                                        <div>Subcategory</div>
-                                        <div>lbs</div>
-                                        <div />
-                                      </div>
-                                      {cardItems.map((item, itemIdx) => {
-                                        const name = item.name || item.item_name || 'Unknown item'
-                                        const quantity = item.quantity ?? item.qty
-                                        const quantityLabel = quantity === '' || quantity === null || quantity === undefined ? '—' : quantity
-                                        const unit = item.unit || item.container || '—'
-                                        const subcategory = item.subcategory ? formatSubcategoryLabel(String(item.subcategory)) : '—'
-                                        const rawWeight = item.pounds ?? item.estimated_lbs
-                                        const weightValue = Number(rawWeight)
-                                        const weightLabel = Number.isFinite(weightValue) ? weightValue.toFixed(1) : '—'
-                                        return (
-                                          <div className="items-row" key={`${rowId}-card-${cardIdx}-item-${itemIdx}`}>
-                                            <div>{name}</div>
-                                            <div className="qty-col">{quantityLabel}</div>
-                                            <div className="unit-col">{unit}</div>
-                                            <div>{subcategory}</div>
-                                            <div className="qty-col">{weightLabel}</div>
-                                            <div />
-                                          </div>
-                                        )
-                                      })}
-                                      {!cardItems.length && (
-                                        <div className="items-row">
-                                          <div style={{ gridColumn: '1 / span 6' }}>No items recorded.</div>
-                                        </div>
-                                      )}
-                                    </div>
-                                  </details>
-                                )
-                              })
-                            ) : (
-                              <p className="items-empty">No cards recorded.</p>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-              </div>
-            )}
           </div>
         )}
         {currentView === 'slack-browser' && (
@@ -4345,6 +4356,7 @@ function App() {
             </div>
           </div>
         )}
+        </div>
       </main>
     </div>
   )
