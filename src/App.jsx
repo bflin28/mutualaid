@@ -2,7 +2,7 @@ import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'rea
 import './App.css'
 
 // Lucide Icons
-import { Leaf, FileText, BarChart3, Menu, X } from 'lucide-react'
+import { FileText, BarChart3, Menu, X } from 'lucide-react'
 
 // UI Components
 import { Badge } from './components/ui/badge'
@@ -2348,16 +2348,8 @@ function App() {
 
   const sidebarContent = (
     <>
-      <div className="p-8 border-b border-gray-200">
-        <div className="flex items-center gap-4">
-          <div className="p-3 bg-green-600 rounded-xl">
-            <Leaf className="w-8 h-8 text-white" />
-          </div>
-          <div>
-            <h1 className="text-xl text-gray-900 font-bold">Chicago Food</h1>
-            <h1 className="text-xl text-gray-900 font-bold">Sovereignty Coalition</h1>
-          </div>
-        </div>
+      <div className="p-6 border-b border-gray-200">
+        <img src="/logo.png" alt="Chicagoland Food Sovereignty Coalition" className="w-full max-w-[200px]" />
       </div>
       <nav className="flex-1 p-6 space-y-2">
         <button
@@ -2403,7 +2395,7 @@ function App() {
         >
           <Menu className="w-6 h-6 text-gray-700" />
         </button>
-        <span className="font-semibold text-gray-900">Food Sovereignty</span>
+        <img src="/logo.png" alt="CFSC" className="h-8" />
       </div>
 
       {/* Mobile Sidebar Overlay */}
