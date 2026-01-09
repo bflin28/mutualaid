@@ -321,6 +321,85 @@ const getRecordRawText = (record) => {
   return 'No message text captured.'
 }
 
+// Tag input component for multi-value fields
+function TagInput({ tags, setTags, suggestions = [], placeholder = 'Type and press Enter' }) {
+  const [inputValue, setInputValue] = useState('')
+  const [showSuggestions, setShowSuggestions] = useState(false)
+  const inputRef = useRef(null)
+
+  const filteredSuggestions = useMemo(() => {
+    if (!inputValue.trim() || inputValue.length < 2) return []
+    const lower = inputValue.toLowerCase()
+    return suggestions
+      .filter(s => s.toLowerCase().includes(lower) && !tags.includes(s))
+      .slice(0, 8)
+  }, [inputValue, suggestions, tags])
+
+  const addTag = (tag) => {
+    const trimmed = tag.trim()
+    if (trimmed && !tags.includes(trimmed)) {
+      setTags([...tags, trimmed])
+    }
+    setInputValue('')
+    setShowSuggestions(false)
+  }
+
+  const removeTag = (tagToRemove) => {
+    setTags(tags.filter(t => t !== tagToRemove))
+  }
+
+  const handleKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault()
+      if (inputValue.trim()) {
+        addTag(inputValue)
+      }
+    } else if (e.key === 'Backspace' && !inputValue && tags.length > 0) {
+      removeTag(tags[tags.length - 1])
+    }
+  }
+
+  return (
+    <div className="tag-input-container">
+      <div className="tag-input-tags">
+        {tags.map((tag, idx) => (
+          <span key={idx} className="tag-input-tag">
+            {tag}
+            <button type="button" className="tag-input-remove" onClick={() => removeTag(tag)}>×</button>
+          </span>
+        ))}
+        <input
+          ref={inputRef}
+          type="text"
+          value={inputValue}
+          onChange={(e) => {
+            setInputValue(e.target.value)
+            setShowSuggestions(true)
+          }}
+          onKeyDown={handleKeyDown}
+          onFocus={() => setShowSuggestions(true)}
+          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+          placeholder={tags.length === 0 ? placeholder : ''}
+          className="tag-input-field"
+        />
+      </div>
+      {showSuggestions && filteredSuggestions.length > 0 && (
+        <ul className="tag-input-suggestions">
+          {filteredSuggestions.map((suggestion, idx) => (
+            <li
+              key={idx}
+              onMouseDown={() => addTag(suggestion)}
+              className="tag-input-suggestion"
+            >
+              {suggestion}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  )
+}
+
 function App() {
   const [currentView, setCurrentView] = useState('logging')
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -452,9 +531,8 @@ function App() {
   })
   const [recurringFormStatus, setRecurringFormStatus] = useState({ state: 'idle', message: '' })
   const [loggingFormData, setLoggingFormData] = useState({
-    location: '',
-    dropOff: '',
-    dropOffCustom: '',
+    locations: [],
+    dropOffs: [],
     date: todayDateString(),
     items: [{
       name: '',
@@ -1387,20 +1465,18 @@ function App() {
       return
     }
 
-    if (!loggingFormData.location.trim()) {
-      setLoggingFormStatus({ state: 'error', message: 'Please enter a location.' })
+    if (loggingFormData.locations.length === 0) {
+      setLoggingFormStatus({ state: 'error', message: 'Please enter at least one location.' })
       return
     }
 
     // Build payload for rescue_logs table
-    const dropOffValue = loggingFormData.dropOff === 'other'
-      ? loggingFormData.dropOffCustom
-      : loggingFormData.dropOff
     const payload = {
-      location: loggingFormData.location,
-      drop_off: dropOffValue,
+      location: loggingFormData.locations.join(', '),
+      drop_off: loggingFormData.dropOffs.join(', '),
       rescued_at: loggingFormData.date,
       items,
+      source: 'manual',
     }
 
     const { error } = await saveRescueLog(payload)
@@ -1415,9 +1491,8 @@ function App() {
     // Reset form after successful save
     setTimeout(() => {
       setLoggingFormData({
-        location: '',
-        dropOff: '',
-        dropOffCustom: '',
+        locations: [],
+        dropOffs: [],
         date: todayDateString(),
         items: [{
           name: '',
@@ -2296,44 +2371,25 @@ function App() {
               <div className="form-row">
                 <label className="full-width">
                   <span>Rescued From</span>
-                  <input
-                    type="text"
-                    value={loggingFormData.location}
-                    onChange={(e) => setLoggingFormData(prev => ({ ...prev, location: e.target.value }))}
-                    placeholder="Store name or address"
-                    list="location-suggestions"
+                  <TagInput
+                    tags={loggingFormData.locations}
+                    setTags={(locations) => setLoggingFormData(prev => ({ ...prev, locations }))}
+                    suggestions={LOCATION_OPTIONS}
+                    placeholder="Type location and press Enter"
                   />
-                  <datalist id="location-suggestions">
-                    {LOCATION_OPTIONS.map((location) => (
-                      <option key={location} value={location} />
-                    ))}
-                  </datalist>
                 </label>
               </div>
 
               <div className="form-row">
                 <label className="full-width">
-                  <span>Drop Off</span>
-                  <select
-                    value={loggingFormData.dropOff}
-                    onChange={(e) => setLoggingFormData(prev => ({ ...prev, dropOff: e.target.value }))}
-                  >
-                    <option value="">Select drop off location</option>
-                    <option value="Keystone">Keystone</option>
-                    <option value="Urban Canopy">Urban Canopy</option>
-                    <option value="other">Other...</option>
-                  </select>
+                  <span>Drop Off To</span>
+                  <TagInput
+                    tags={loggingFormData.dropOffs}
+                    setTags={(dropOffs) => setLoggingFormData(prev => ({ ...prev, dropOffs }))}
+                    suggestions={['Keystone', 'Urban Canopy']}
+                    placeholder="Type location and press Enter"
+                  />
                 </label>
-                {loggingFormData.dropOff === 'other' && (
-                  <label className="full-width" style={{ marginTop: '0.5rem' }}>
-                    <input
-                      type="text"
-                      value={loggingFormData.dropOffCustom}
-                      onChange={(e) => setLoggingFormData(prev => ({ ...prev, dropOffCustom: e.target.value }))}
-                      placeholder="Enter drop off location"
-                    />
-                  </label>
-                )}
               </div>
 
               <div className="form-row">
@@ -2577,6 +2633,12 @@ function App() {
                     itemCount += 1
                   })
                 })
+                const sourceLabel = rec.source === 'slack_import' ? 'Import'
+                  : rec.source === 'manual' ? 'Manual'
+                  : 'Slack'
+                const sourceClass = rec.source === 'slack_import' ? 'source-import'
+                  : rec.source === 'manual' ? 'source-manual'
+                  : 'source-slack'
                 return (
                   <div key={rec.id || rec.message_key} className="activity-row">
                     <span className="activity-date">{dateStr}</span>
@@ -2587,6 +2649,7 @@ function App() {
                     </span>
                     <span className="activity-weight">{totalLbs.toFixed(0)} lbs</span>
                     <span className="activity-items">{itemCount} items</span>
+                    <span className={`activity-source ${sourceClass}`}>{sourceLabel}</span>
                   </div>
                 )
               })}

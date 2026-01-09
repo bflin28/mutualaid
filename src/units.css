@@ -1,0 +1,250 @@
+/* Units Page Styles */
+
+.units-container {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 2rem;
+  min-height: 100vh;
+}
+
+.units-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.units-header h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #0f172a;
+}
+
+.units-save-btn {
+  background: #16a34a;
+  color: white;
+  border: none;
+  padding: 0.75rem 1.5rem;
+  border-radius: 10px;
+  font-size: 1rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.units-save-btn:hover:not(:disabled) {
+  background: #15803d;
+  transform: translateY(-1px);
+}
+
+.units-save-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.units-loading,
+.units-error {
+  text-align: center;
+  padding: 4rem 2rem;
+}
+
+.units-error {
+  color: #dc2626;
+}
+
+.units-status {
+  margin-bottom: 1rem;
+  padding: 0.75rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+}
+
+.units-status.error {
+  background: #fef2f2;
+  color: #dc2626;
+  border: 1px solid #fecaca;
+}
+
+.units-status.saving {
+  background: #fefce8;
+  color: #ca8a04;
+  border: 1px solid #fef08a;
+}
+
+.units-status.saved {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+}
+
+.units-content {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.units-section {
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  padding: 1.5rem;
+}
+
+.units-section h2 {
+  margin: 0 0 0.25rem 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+.units-section-desc {
+  margin: 0 0 1rem 0;
+  font-size: 0.85rem;
+  color: #64748b;
+}
+
+.units-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+
+.units-table th {
+  text-align: left;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #64748b;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.units-table td {
+  padding: 0.5rem 0.75rem;
+  border-bottom: 1px solid #f1f5f9;
+}
+
+.units-table tr:last-child td {
+  border-bottom: none;
+}
+
+.units-table .unit-name {
+  font-weight: 500;
+  color: #334155;
+}
+
+.units-table input[type="number"] {
+  width: 100px;
+  padding: 0.5rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: #f8fafc;
+  transition: all 0.15s ease;
+}
+
+.units-table input:focus {
+  outline: none;
+  border-color: #16a34a;
+  background: white;
+}
+
+.units-remove-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: none;
+  background: #fef2f2;
+  color: #dc2626;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 1.1rem;
+  line-height: 1;
+  transition: all 0.15s ease;
+}
+
+.units-remove-btn:hover {
+  background: #dc2626;
+  color: white;
+}
+
+.units-empty {
+  color: #9ca3af;
+  font-style: italic;
+  text-align: center;
+  padding: 1rem;
+}
+
+.units-add-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  padding-top: 0.5rem;
+  border-top: 1px solid #f1f5f9;
+}
+
+.units-add-row input[type="text"],
+.units-add-row input[type="number"] {
+  flex: 1;
+  padding: 0.6rem 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  background: #f8fafc;
+}
+
+.units-add-row input:focus {
+  outline: none;
+  border-color: #16a34a;
+  background: white;
+}
+
+.units-add-btn {
+  background: #f0fdf4;
+  color: #16a34a;
+  border: 1px solid #bbf7d0;
+  padding: 0.6rem 1rem;
+  border-radius: 8px;
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.units-add-btn:hover {
+  background: #dcfce7;
+  border-color: #16a34a;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+  .units-container {
+    padding: 1rem;
+  }
+
+  .units-header {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 1rem;
+  }
+
+  .units-save-btn {
+    width: 100%;
+  }
+
+  .units-table input[type="number"] {
+    width: 80px;
+  }
+
+  .units-add-row {
+    flex-wrap: wrap;
+  }
+
+  .units-add-row input {
+    min-width: 100px;
+  }
+}

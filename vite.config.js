@@ -19,6 +19,8 @@ export default defineConfig({
         main: resolve(__dirname, 'index.html'),
         admin: resolve(__dirname, 'admin/index.html'),
         review: resolve(__dirname, 'review/index.html'),
+        import: resolve(__dirname, 'import/index.html'),
+        units: resolve(__dirname, 'units/index.html'),
       },
     },
   },

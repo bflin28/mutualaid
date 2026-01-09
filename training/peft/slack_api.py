@@ -231,7 +231,7 @@ def load_audited() -> List[Dict[str, Any]]:
       items = row.get("items") or []
       normalized = {
         "id": f"rescue-{row['id']}",
-        "source": "rescue_logs",
+        "source": row.get("source") or "manual",
         "rescue_location_canonical": row.get("location") or "",
         "drop_off_location_canonical": row.get("drop_off") or "",
         "start_ts": row.get("rescued_at") or row.get("created_at"),
@@ -716,6 +716,7 @@ def create_rescue_log(payload: Dict[str, Any]):
       "items": items_with_weights,
       "total_estimated_lbs": round(total_lbs, 1) if total_lbs > 0 else None,
       "notes": payload.get("notes"),
+      "source": payload.get("source", "manual"),
     }).execute()
 
     new_id = result.data[0]["id"] if result.data else None
@@ -727,6 +728,108 @@ def create_rescue_log(payload: Dict[str, Any]):
 @app.get("/health")
 def health():
   return {"status": "ok", "total": len(RECORDS)}
+
+
+# Weight configuration endpoints
+
+WEIGHT_CONFIG_PATH = pathlib.Path(__file__).parent / "weight_config.json"
+
+def _load_weight_config_from_file():
+  """Load weight config from local JSON file (for seeding)."""
+  if WEIGHT_CONFIG_PATH.exists():
+    with open(WEIGHT_CONFIG_PATH, "r", encoding="utf-8") as f:
+      return json.load(f)
+  return {
+    "base": {},
+    "unit_overrides": {},
+    "item_specific": {},
+    "food_weights": {}
+  }
+
+@app.get("/weight-config")
+def get_weight_config():
+  """Get the current weight configuration from Supabase."""
+  default_config = {
+    "base": {"default": 5, "produce_heavy": 25, "produce_light": 8, "meat": 18, "dairy": 15},
+    "unit_overrides": {"case": 18, "box": 15, "bag": 8, "pallet": 170, "lb": 1, "dozen": 4},
+    "item_specific": {},
+    "food_weights": {}
+  }
+
+  if not USE_SUPABASE or not supabase:
+    # Fallback to file if Supabase not configured
+    try:
+      return _load_weight_config_from_file()
+    except Exception:
+      return default_config
+
+  try:
+    response = supabase.table("weight_config").select("config").eq("id", "default").execute()
+    if response.data and len(response.data) > 0 and response.data[0].get("config"):
+      config = response.data[0]["config"]
+      # Return config if it has content
+      if config.get("base") or config.get("unit_overrides") or config.get("item_specific"):
+        return config
+
+    # If DB is empty, try to seed from JSON file, otherwise use defaults
+    try:
+      file_config = _load_weight_config_from_file()
+    except Exception:
+      file_config = default_config
+
+    if file_config.get("base") or file_config.get("unit_overrides"):
+      # Try to seed the database
+      try:
+        supabase.table("weight_config").upsert({
+          "id": "default",
+          "config": file_config,
+        }).execute()
+      except Exception as seed_err:
+        print(f"Warning: Could not seed weight_config table: {seed_err}")
+    return file_config
+  except Exception as exc:
+    print(f"Warning: weight_config query failed: {exc}")
+    # Fallback to file on any DB error
+    try:
+      return _load_weight_config_from_file()
+    except Exception:
+      return default_config
+
+@app.post("/weight-config")
+def save_weight_config(config: Dict[str, Any]):
+  """Save updated weight configuration to Supabase."""
+  # Validate structure
+  required_keys = ["base", "unit_overrides", "item_specific"]
+  for key in required_keys:
+    if key not in config:
+      raise HTTPException(status_code=400, detail=f"Missing required key: {key}")
+
+  # Validate types
+  if not isinstance(config.get("base"), dict):
+    raise HTTPException(status_code=400, detail="'base' must be an object")
+  if not isinstance(config.get("unit_overrides"), dict):
+    raise HTTPException(status_code=400, detail="'unit_overrides' must be an object")
+  if not isinstance(config.get("item_specific"), dict):
+    raise HTTPException(status_code=400, detail="'item_specific' must be an object")
+
+  if not USE_SUPABASE or not supabase:
+    # Fallback to file if Supabase not configured
+    try:
+      with open(WEIGHT_CONFIG_PATH, "w", encoding="utf-8") as f:
+        json.dump(config, f, indent=2, ensure_ascii=False)
+      return {"status": "ok"}
+    except Exception as exc:
+      raise HTTPException(status_code=500, detail=f"Could not save weight config: {exc}") from exc
+
+  try:
+    supabase.table("weight_config").upsert({
+      "id": "default",
+      "config": config,
+      "updated_at": "now()"
+    }).execute()
+    return {"status": "ok"}
+  except Exception as exc:
+    raise HTTPException(status_code=500, detail=f"Could not save weight config: {exc}") from exc
 
 
 # Model inference endpoints

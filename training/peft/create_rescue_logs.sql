@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS rescue_logs (
 -- Add drop_off column if table already exists
 ALTER TABLE rescue_logs ADD COLUMN IF NOT EXISTS drop_off TEXT;
 
+-- Add source column to track where the entry came from (manual, slack_import)
+ALTER TABLE rescue_logs ADD COLUMN IF NOT EXISTS source TEXT DEFAULT 'manual';
+
 -- Index for querying by location
 CREATE INDEX IF NOT EXISTS idx_rescue_logs_location ON rescue_logs(location);
 
