@@ -2349,7 +2349,7 @@ function App() {
   const sidebarContent = (
     <>
       <div className="p-6 border-b border-gray-200">
-        <img src="/logo.png" alt="Chicagoland Food Sovereignty Coalition" className="w-full max-w-[200px]" />
+        <img src="/logo.png" alt="Chicagoland Food Sovereignty Coalition" className="w-full" />
       </div>
       <nav className="flex-1 p-6 space-y-2">
         <button
