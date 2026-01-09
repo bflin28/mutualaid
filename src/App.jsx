@@ -2465,12 +2465,11 @@ function App() {
 
               <div className="form-row">
                 <label className="full-width">
-                  <span>Your Name</span>
+                  <span>Name</span>
                   <input
                     type="text"
                     value={loggingFormData.rescued_by}
                     onChange={(e) => setLoggingFormData(prev => ({ ...prev, rescued_by: e.target.value }))}
-                    placeholder="Who did this rescue?"
                   />
                 </label>
               </div>
