@@ -608,10 +608,10 @@ function App() {
 
   // Auto-load audited stats when switching to the stats tab
   useEffect(() => {
-    if (currentView === 'audited-stats' && auditedStats.records.length === 0 && !auditedLoading) {
+    if (currentView === 'audited-stats' && auditedStats.records.length === 0 && !auditedLoading && !auditedError) {
       loadAuditedStats()
     }
-  }, [currentView, auditedStats.records.length, auditedLoading, loadAuditedStats])
+  }, [currentView, auditedStats.records.length, auditedLoading, auditedError, loadAuditedStats])
 
   // Calculate weekly stats from audited records
   const weeklyStats = useMemo(() => {
