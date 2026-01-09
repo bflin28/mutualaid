@@ -17,7 +17,7 @@ export const auditSlackRecord = async (record) => {
 
 export const saveRescueLog = async (payload) => {
   try {
-    const resp = await fetch(`${API_BASE}/rescue-log`, {
+    const resp = await fetch('/api/rescue-log', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

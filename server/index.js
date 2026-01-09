@@ -604,6 +604,54 @@ app.post('/api/food-log/normalize', (req, res) => {
   res.json({ data: normalized })
 })
 
+app.post('/api/rescue-log', async (req, res) => {
+  if (!supabase) {
+    res.status(500).json({ error: 'Supabase not configured' })
+    return
+  }
+
+  const payload = req.body || {}
+
+  if (!payload.location) {
+    res.status(400).json({ error: 'Missing required field: location' })
+    return
+  }
+  if (!payload.rescued_at) {
+    res.status(400).json({ error: 'Missing required field: rescued_at' })
+    return
+  }
+
+  const items = Array.isArray(payload.items) ? payload.items : []
+  const itemsWithWeights = addEstimatedWeights(items)
+  const totalLbs = calculateTotalWeight(itemsWithWeights)
+
+  try {
+    const result = await supabase
+      .from('rescue_logs')
+      .insert({
+        location: payload.location,
+        drop_off: payload.drop_off || null,
+        rescued_at: payload.rescued_at,
+        rescued_by: payload.rescued_by || null,
+        items: itemsWithWeights,
+        total_estimated_lbs: totalLbs > 0 ? Math.round(totalLbs * 10) / 10 : null,
+        notes: payload.notes || null,
+        source: payload.source || 'manual',
+      })
+      .select()
+      .maybeSingle()
+
+    if (result.error) {
+      res.status(500).json({ error: result.error.message || 'Failed to save rescue log' })
+      return
+    }
+
+    res.json({ status: 'ok', id: result.data?.id || null })
+  } catch (err) {
+    res.status(500).json({ error: err.message || 'Failed to save rescue log' })
+  }
+})
+
 app.post('/api/slack/events', async (req, res) => {
   if (!slackBotToken && !slackPostingDisabled) {
     res.status(400).json({ error: 'Slack bot token missing on server' })
