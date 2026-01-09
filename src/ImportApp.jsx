@@ -33,6 +33,7 @@ const markAsReviewed = async (ids) => {
 }
 
 const LOCATION_OPTIONS = Object.keys(locationAliases || {}).sort((a, b) => a.localeCompare(b))
+const DROP_OFF_OPTIONS = ['Keystone', 'Love Fridge', 'NWMA', 'Urban Canopy']
 const SUBCATEGORY_OPTIONS = ['produce', 'grain', 'meat', 'drinks', 'snacks', 'dry goods', 'dairy']
 const UNIT_OPTIONS = [
   'cases', 'boxes', 'bags', 'lbs', 'pallets (full)', 'pallets (small)',
@@ -602,7 +603,7 @@ function ImportApp() {
             <TagInput
               tags={formData.dropOffs}
               setTags={(dropOffs) => setFormData(prev => ({ ...prev, dropOffs }))}
-              suggestions={['Keystone', 'Urban Canopy', ...LOCATION_OPTIONS]}
+              suggestions={DROP_OFF_OPTIONS}
               placeholder="Type location and press Enter"
             />
           </div>
