@@ -59,6 +59,7 @@ const UNIT_OPTIONS = [
   'boxes (large)',
   'bags',
   'bins',
+  'cans',
   'lbs',
   'pounds',
   'pallets (full)',
