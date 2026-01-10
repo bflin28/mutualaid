@@ -37,7 +37,7 @@ const LOCATION_OPTIONS = Array.isArray(rescueLocations) ? rescueLocations : []
 const DROP_OFF_OPTIONS = Array.isArray(dropOffLocations) ? dropOffLocations : []
 const SUBCATEGORY_OPTIONS = ['produce', 'grain', 'meat', 'drinks', 'snacks', 'dry goods', 'dairy']
 const UNIT_OPTIONS = [
-  'cases', 'boxes', 'bags', 'bins', 'lbs', 'pounds', 'pallets (full)', 'pallets (small)',
+  'cases', 'boxes (small)', 'boxes (large)', 'bags', 'bins', 'lbs', 'pounds', 'pallets (full)', 'pallets (small)',
   'crates', 'flats', 'items', 'dozen', 'each', 'gallons', 'packages', 'sacks',
   'loaves', 'gaylords',
 ]
