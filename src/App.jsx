@@ -54,6 +54,7 @@ const ITEM_SUGGESTIONS = (() => {
 const WAREHOUSE_SUBCATEGORY_OPTIONS = ['produce', 'grain', 'meat', 'drinks', 'snacks', 'dry goods', 'dairy']
 const UNIT_OPTIONS = [
   'cases',
+  'boxes',
   'boxes (small)',
   'boxes (large)',
   'bags',
