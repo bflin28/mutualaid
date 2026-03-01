@@ -1,8 +1,0 @@
-data/
-checkpoints/
-wandb/
-*.bin
-*.safetensors
-*.pt
-*.ckpt
-*.log
