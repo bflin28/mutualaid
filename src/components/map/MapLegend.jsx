@@ -1,6 +1,6 @@
 export function MapLegend({ selectedLocation }) {
   return (
-    <div className="leaflet-bottom leaflet-right" style={{ pointerEvents: 'auto' }}>
+    <div className="leaflet-bottom leaflet-right hidden md:block" style={{ pointerEvents: 'auto' }}>
       <div
         className="leaflet-control m-3 px-4 py-3 rounded-xl text-xs"
         style={{

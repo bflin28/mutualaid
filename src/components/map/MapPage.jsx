@@ -54,29 +54,31 @@ export function MapPage() {
       {/* Glass overlay: stats + controls */}
       <div className="absolute top-4 left-4 right-4 z-[1000] pointer-events-none">
         <div className="flex flex-wrap items-start gap-3">
-          {/* Stat cards */}
-          <GlassStatCard
-            label="Total Rescued"
-            value={`${(summary.totalLbs || 0).toLocaleString()}`}
-            unit="lbs"
-            color="#34d399"
-          />
-          <GlassStatCard
-            label="Rescues"
-            value={summary.totalTrips?.toLocaleString() || '0'}
-            color="#38bdf8"
-          />
-          <GlassStatCard
-            label="Locations"
-            value={summary.locationCount || 0}
-            color="#a78bfa"
-          />
-          <GlassStatCard
-            label="Top Source"
-            value={summary.topLocation || '—'}
-            subtitle={summary.topLocationLbs ? `${summary.topLocationLbs.toLocaleString()} lbs` : ''}
-            color="#fb923c"
-          />
+          {/* Stat cards — hidden on mobile to reduce clutter */}
+          <div className="hidden md:contents">
+            <GlassStatCard
+              label="Total Rescued"
+              value={`${(summary.totalLbs || 0).toLocaleString()}`}
+              unit="lbs"
+              color="#34d399"
+            />
+            <GlassStatCard
+              label="Rescues"
+              value={summary.totalTrips?.toLocaleString() || '0'}
+              color="#38bdf8"
+            />
+            <GlassStatCard
+              label="Locations"
+              value={summary.locationCount || 0}
+              color="#a78bfa"
+            />
+            <GlassStatCard
+              label="Top Source"
+              value={summary.topLocation || '—'}
+              subtitle={summary.topLocationLbs ? `${summary.topLocationLbs.toLocaleString()} lbs` : ''}
+              color="#fb923c"
+            />
+          </div>
 
           {/* Year filter */}
           <div className="pointer-events-auto ml-auto">
@@ -96,11 +98,12 @@ export function MapPage() {
         </div>
       </div>
 
-      {/* Locations panel toggle */}
+      {/* Locations panel toggle — centered on mobile, bottom-right on desktop */}
       <button
         onClick={() => setPanelOpen(p => !p)}
-        className="absolute bottom-20 right-4 z-[1001] pointer-events-auto
-          px-3 py-2.5 rounded-xl text-sm font-medium flex items-center gap-2
+        className="absolute z-[1001] pointer-events-auto
+          bottom-24 left-1/2 -translate-x-1/2 md:left-auto md:translate-x-0 md:bottom-20 md:right-4
+          px-5 py-3 md:px-3 md:py-2.5 rounded-xl text-sm font-medium flex items-center gap-2
           bg-slate-900/80 backdrop-blur-xl border border-white/10
           text-slate-200 shadow-lg shadow-black/30
           hover:bg-slate-900/90 hover:border-white/20

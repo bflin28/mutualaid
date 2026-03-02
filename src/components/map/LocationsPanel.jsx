@@ -137,18 +137,26 @@ export function LocationsPanel({ open, onClose, locationTotals, flows, selectedL
   }
 
   return (
-    <div
-      className={`fixed top-0 right-0 h-full z-[1002] transition-transform duration-300 ease-in-out
-        ${open ? 'translate-x-0' : 'translate-x-full'}
-        w-[420px] max-w-[85vw] flex flex-col`}
-      style={{
-        background: 'rgba(15, 23, 42, 0.95)',
-        backdropFilter: 'blur(20px) saturate(180%)',
-        WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-        borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
-        boxShadow: '-8px 0 40px rgba(0, 0, 0, 0.5)',
-      }}
-    >
+    <>
+      {/* Backdrop overlay — mobile only */}
+      {open && (
+        <div
+          className="fixed inset-0 z-[1001] bg-black/50 md:hidden"
+          onClick={onClose}
+        />
+      )}
+      <div
+        className={`fixed top-0 right-0 h-full z-[1002] transition-transform duration-300 ease-in-out
+          ${open ? 'translate-x-0' : 'translate-x-full'}
+          w-full md:w-[420px] md:max-w-[85vw] flex flex-col`}
+        style={{
+          background: 'rgba(15, 23, 42, 0.95)',
+          backdropFilter: 'blur(20px) saturate(180%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+          borderLeft: '1px solid rgba(255, 255, 255, 0.08)',
+          boxShadow: '-8px 0 40px rgba(0, 0, 0, 0.5)',
+        }}
+      >
       {/* Header */}
       <div className="p-4 border-b border-white/10 shrink-0">
         <div className="flex items-center justify-between mb-3">
@@ -245,6 +253,7 @@ export function LocationsPanel({ open, onClose, locationTotals, flows, selectedL
         )}
       </div>
     </div>
+    </>
   )
 }
 

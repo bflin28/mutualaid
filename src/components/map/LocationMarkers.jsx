@@ -91,7 +91,7 @@ export function LocationMarkers({ locationTotals, selectedLocation, connectedLoc
             }}
           >
             <Popup>
-              <div className="min-w-[200px] text-slate-200">
+              <div className="min-w-[200px] text-slate-200" x-apple-data-detectors="false">
                 <div className="font-semibold text-sm mb-1 text-white">{name}</div>
                 <div
                   className="text-[10px] font-bold tracking-wider uppercase px-2 py-0.5 rounded-full inline-block mb-2"
@@ -100,7 +100,9 @@ export function LocationMarkers({ locationTotals, selectedLocation, connectedLoc
                   {TYPE_LABELS[type]}
                 </div>
                 {coords.address && (
-                  <div className="text-xs text-slate-400 mb-2">{coords.address}</div>
+                  <div className="text-xs text-slate-400 mb-2" style={{ WebkitTextSizeAdjust: 'none' }}>
+                    <span style={{ pointerEvents: 'none' }}>{coords.address}</span>
+                  </div>
                 )}
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs mb-2">
                   <div className="text-slate-400">Total lbs</div>
