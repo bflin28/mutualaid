@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { Leaf, FileText, BarChart3, UserPlus, Map, Menu, X } from 'lucide-react'
+import { FileText, BarChart3, UserPlus, Map, Menu, X } from 'lucide-react'
 
 const NAV_ITEMS = [
   { to: '/', icon: BarChart3, label: 'Statistics' },
@@ -16,9 +16,7 @@ export function MobileNav() {
     <div className="md:hidden">
       <div className="flex items-center justify-between p-4 bg-white border-b border-gray-200">
         <div className="flex items-center gap-2">
-          <div className="p-1.5 bg-green-600 rounded-lg">
-            <Leaf className="w-5 h-5 text-white" />
-          </div>
+          <img src="/favicon.png" alt="CFSC" className="w-8 h-8" />
           <span className="font-semibold text-gray-900">CFSC</span>
         </div>
         <button

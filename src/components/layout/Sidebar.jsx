@@ -1,5 +1,5 @@
 import { NavLink } from 'react-router-dom'
-import { Leaf, FileText, BarChart3, UserPlus, Map } from 'lucide-react'
+import { FileText, BarChart3, UserPlus, Map } from 'lucide-react'
 
 const NAV_ITEMS = [
   { to: '/', icon: BarChart3, label: 'Statistics' },
@@ -13,9 +13,7 @@ export function Sidebar() {
     <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col">
       <div className="p-6 border-b border-gray-200">
         <div className="flex items-center gap-3">
-          <div className="p-2 bg-green-600 rounded-lg">
-            <Leaf className="w-6 h-6 text-white" />
-          </div>
+          <img src="/favicon.png" alt="CFSC" className="w-10 h-10" />
           <div>
             <h1 className="text-gray-900 font-semibold leading-tight">Chicago Food</h1>
             <h1 className="text-gray-900 font-semibold leading-tight">Sovereignty</h1>
