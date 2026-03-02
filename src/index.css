@@ -13,6 +13,10 @@ body {
   min-height: 100vh;
 }
 
+/* Hide scrollbar on tab bars */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
 /* ============ MAP DARK THEME ============ */
 
 /* Dark background during tile loading */

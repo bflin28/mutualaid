@@ -288,7 +288,7 @@ export function StatsDashboard() {
       )}
 
       {/* Navigation tabs */}
-      <div className="flex border-b border-gray-200 mb-6">
+      <div className="flex overflow-x-auto border-b border-gray-200 mb-6 -mx-1 px-1 scrollbar-hide">
         {[
           { id: 'overview', label: 'Overview', icon: Package },
           { id: 'store', label: 'By Store', icon: Store },
@@ -298,7 +298,7 @@ export function StatsDashboard() {
           <button
             key={tab.id}
             onClick={() => { setView(tab.id); setSelectedStore(null); setSelectedLocation(null); setSelectedDropOff(null); setExpandedRows(new Set()) }}
-            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors whitespace-nowrap shrink-0 ${
               view === tab.id
                 ? 'border-green-600 text-green-700'
                 : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
@@ -335,6 +335,7 @@ export function StatsDashboard() {
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-3">By Category</h3>
             <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+              <div className="overflow-x-auto">
               <table className="w-full">
                 <thead>
                   <tr className="border-b border-gray-200 bg-gray-50">
@@ -365,6 +366,7 @@ export function StatsDashboard() {
                   ))}
                 </tbody>
               </table>
+              </div>
             </div>
           </div>
         </div>
@@ -449,6 +451,7 @@ export function StatsDashboard() {
             Community organizations receiving rescued food — click to see individual logs
           </p>
           <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
+            <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-gray-200 bg-gray-50">
@@ -480,6 +483,7 @@ export function StatsDashboard() {
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
       )}

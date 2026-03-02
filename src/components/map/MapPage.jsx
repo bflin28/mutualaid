@@ -9,7 +9,7 @@ export function MapPage() {
   const [loading, setLoading] = useState(true)
   const [yearFilter, setYearFilter] = useState(null)
   const [selectedLocation, setSelectedLocation] = useState(null)
-  const [panelOpen, setPanelOpen] = useState(true)
+  const [panelOpen, setPanelOpen] = useState(() => window.innerWidth >= 768)
 
   useEffect(() => {
     setLoading(true)
@@ -40,8 +40,8 @@ export function MapPage() {
 
   return (
     <div
-      className="relative map-dark -m-4 md:-m-8"
-      style={{ width: 'calc(100% + 4rem)', height: '100vh' }}
+      className="relative map-dark -m-4 md:-m-8 w-[calc(100%+2rem)] md:w-[calc(100%+4rem)]"
+      style={{ height: '100vh' }}
     >
       {/* Full-bleed map */}
       <RescueMap
