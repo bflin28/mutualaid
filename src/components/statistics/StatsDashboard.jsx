@@ -25,6 +25,7 @@ export function StatsDashboard() {
   const [view, setView] = useState('overview') // overview | store | location
   const [selectedStore, setSelectedStore] = useState(null)
   const [selectedLocation, setSelectedLocation] = useState(null)
+  const [selectedDropOff, setSelectedDropOff] = useState(null)
   const [yearFilter, setYearFilter] = useState('')
   const [sortCol, setSortCol] = useState('lbs')
   const [sortDir, setSortDir] = useState('desc')
@@ -32,10 +33,10 @@ export function StatsDashboard() {
 
   useEffect(() => {
     setLoading(true)
-    fetch('/parsed_data.json')
+    fetch('/api/food-logs?limit=10000')
       .then(r => r.json())
-      .then(setData)
-      .catch(err => console.error('Failed to load parsed data:', err))
+      .then(result => setData(Array.isArray(result) ? result : result.data || []))
+      .catch(err => console.error('Failed to load food logs:', err))
       .finally(() => setLoading(false))
   }, [])
 
@@ -161,6 +162,14 @@ export function StatsDashboard() {
       .sort((a, b) => (b.rescued_at || '').localeCompare(a.rescued_at || ''))
   }, [filtered])
 
+  // Rescues for a specific drop-off destination
+  const dropOffRescues = useMemo(() => {
+    if (!selectedDropOff || !filtered) return []
+    return filtered
+      .filter(r => r.drop_off_location_name === selectedDropOff)
+      .sort((a, b) => (b.rescued_at || '').localeCompare(a.rescued_at || ''))
+  }, [filtered, selectedDropOff])
+
   // Rescues for a store group
   const storeRescues = useMemo(() => {
     if (!selectedStore || !filtered) return []
@@ -267,7 +276,7 @@ export function StatsDashboard() {
         ].map(tab => (
           <button
             key={tab.id}
-            onClick={() => { setView(tab.id); setSelectedStore(null); setSelectedLocation(null); setExpandedRows(new Set()) }}
+            onClick={() => { setView(tab.id); setSelectedStore(null); setSelectedLocation(null); setSelectedDropOff(null); setExpandedRows(new Set()) }}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium border-b-2 transition-colors ${
               view === tab.id
                 ? 'border-green-600 text-green-700'
@@ -283,6 +292,24 @@ export function StatsDashboard() {
       {/* Overview tab */}
       {view === 'overview' && (
         <div className="space-y-8">
+          {/* Recent rescues feed */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Recent Rescues</h3>
+            <RecentRescuesFeed rescues={filtered} />
+          </div>
+
+          {/* Top rescue sources (exclude warehouse) */}
+          <div>
+            <h3 className="text-lg font-medium text-gray-900 mb-3">Top Rescue Sources</h3>
+            <StoreGroupTable
+              groups={sortedGroups.slice(0, 15)}
+              sortCol={sortCol}
+              sortDir={sortDir}
+              toggleSort={toggleSort}
+              onSelectGroup={(name) => { setView('store'); setSelectedStore(name); setExpandedRows(new Set()) }}
+            />
+          </div>
+
           {/* Category breakdown */}
           <div>
             <h3 className="text-lg font-medium text-gray-900 mb-3">By Category</h3>
@@ -318,18 +345,6 @@ export function StatsDashboard() {
                 </tbody>
               </table>
             </div>
-          </div>
-
-          {/* Top rescue sources (exclude warehouse) */}
-          <div>
-            <h3 className="text-lg font-medium text-gray-900 mb-3">Top Rescue Sources</h3>
-            <StoreGroupTable
-              groups={sortedGroups.slice(0, 15)}
-              sortCol={sortCol}
-              sortDir={sortDir}
-              toggleSort={toggleSort}
-              onSelectGroup={(name) => { setView('store'); setSelectedStore(name); setExpandedRows(new Set()) }}
-            />
           </div>
         </div>
       )}
@@ -394,8 +409,8 @@ export function StatsDashboard() {
         />
       )}
 
-      {/* Drop-offs tab */}
-      {view === 'dropoff' && (
+      {/* Drop-offs tab — list view */}
+      {view === 'dropoff' && !selectedDropOff && (
         <div>
           {/* Warehouse summary */}
           <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
@@ -410,7 +425,7 @@ export function StatsDashboard() {
 
           <h3 className="text-lg font-medium text-gray-900 mb-3">Drop-off Destinations</h3>
           <p className="text-sm text-gray-500 mb-4">
-            Community organizations that picked up food from the warehouse (UC/Keystone)
+            Community organizations receiving rescued food — click to see individual logs
           </p>
           <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm">
             <table className="w-full">
@@ -420,23 +435,48 @@ export function StatsDashboard() {
                   <th className="text-right text-xs font-medium text-gray-600 px-4 py-3">EST. LBS</th>
                   <th className="text-right text-xs font-medium text-gray-600 px-4 py-3"># PICKUPS</th>
                   <th className="text-right text-xs font-medium text-gray-600 px-4 py-3">AVG LBS</th>
+                  <th className="text-right text-xs font-medium text-gray-600 px-4 py-3"></th>
                 </tr>
               </thead>
               <tbody>
                 {stats.byDropOff.map(d => (
-                  <tr key={d.name} className="border-b border-gray-100 hover:bg-gray-50">
+                  <tr
+                    key={d.name}
+                    className="border-b border-gray-100 hover:bg-gray-50 cursor-pointer"
+                    onClick={() => { setSelectedDropOff(d.name); setExpandedRows(new Set()) }}
+                  >
                     <td className="px-4 py-3 text-sm font-medium text-gray-900">{d.name}</td>
                     <td className="px-4 py-3 text-sm text-gray-600 text-right">{Math.round(d.lbs).toLocaleString()}</td>
                     <td className="px-4 py-3 text-sm text-gray-600 text-right">{d.count}</td>
                     <td className="px-4 py-3 text-sm text-gray-600 text-right">{Math.round(d.lbs / d.count).toLocaleString()}</td>
+                    <td className="px-4 py-3 text-sm text-gray-400 text-right">
+                      <ChevronRight className="w-4 h-4 inline" />
+                    </td>
                   </tr>
                 ))}
                 {stats.byDropOff.length === 0 && (
-                  <tr><td colSpan={4} className="text-center py-8 text-gray-400">No drop-off data</td></tr>
+                  <tr><td colSpan={5} className="text-center py-8 text-gray-400">No drop-off data</td></tr>
                 )}
               </tbody>
             </table>
           </div>
+        </div>
+      )}
+
+      {/* Drop-offs tab — detail view */}
+      {view === 'dropoff' && selectedDropOff && (
+        <div>
+          <button
+            onClick={() => { setSelectedDropOff(null); setExpandedRows(new Set()) }}
+            className="text-sm text-green-600 hover:text-green-800 mb-4 flex items-center gap-1"
+          >
+            ← Back to all drop-offs
+          </button>
+          <h3 className="text-lg font-medium text-gray-900 mb-1">{selectedDropOff}</h3>
+          <p className="text-sm text-gray-500 mb-4">
+            {dropOffRescues.length} food logs · {Math.round(dropOffRescues.reduce((s, r) => s + (r.total_estimated_lbs || 0), 0)).toLocaleString()} estimated lbs
+          </p>
+          <RescueLogList rescues={dropOffRescues} expandedRows={expandedRows} toggleRow={toggleRow} />
         </div>
       )}
     </div>
@@ -782,6 +822,99 @@ function RescueLogList({ rescues, expandedRows, toggleRow }) {
           </button>
         </div>
       )}
+    </div>
+  )
+}
+
+function RecentRescuesFeed({ rescues }) {
+  const [expanded, setExpanded] = useState(new Set())
+  const recent = useMemo(() => {
+    return [...rescues]
+      .sort((a, b) => (b.rescued_at || '').localeCompare(a.rescued_at || ''))
+      .slice(0, 10)
+  }, [rescues])
+
+  function timeAgo(dateStr) {
+    if (!dateStr) return ''
+    const diff = Date.now() - new Date(dateStr).getTime()
+    const mins = Math.floor(diff / 60000)
+    if (mins < 60) return `${mins}m ago`
+    const hrs = Math.floor(mins / 60)
+    if (hrs < 24) return `${hrs}h ago`
+    const days = Math.floor(hrs / 24)
+    if (days < 30) return `${days}d ago`
+    const months = Math.floor(days / 30)
+    return `${months}mo ago`
+  }
+
+  const toggle = (i) => {
+    setExpanded(prev => {
+      const next = new Set(prev)
+      next.has(i) ? next.delete(i) : next.add(i)
+      return next
+    })
+  }
+
+  if (recent.length === 0) {
+    return <div className="text-gray-400 text-sm">No rescues yet</div>
+  }
+
+  return (
+    <div className="bg-white border border-gray-200 rounded-lg overflow-hidden shadow-sm divide-y divide-gray-100">
+      {recent.map((r, i) => {
+        const isOpen = expanded.has(i)
+        const topItems = (r.items || []).slice(0, 3)
+        const moreCount = (r.items || []).length - 3
+        return (
+          <div key={r.id || i}>
+            <button
+              onClick={() => toggle(i)}
+              className="w-full text-left px-4 py-3 hover:bg-gray-50"
+            >
+              <div className="flex items-center justify-between mb-1">
+                <div className="flex items-center gap-2">
+                  {isOpen
+                    ? <ChevronDown className="w-4 h-4 text-gray-400 shrink-0" />
+                    : <ChevronRight className="w-4 h-4 text-gray-400 shrink-0" />
+                  }
+                  <span className="text-sm font-medium text-gray-900">
+                    {r.rescue_location_name || 'Unknown'}
+                  </span>
+                  {r.drop_off_location_name && (
+                    <span className="text-xs text-purple-600">→ {r.drop_off_location_name}</span>
+                  )}
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
+                    {(r.items || []).length} items
+                  </span>
+                  <span className="text-sm font-semibold text-green-700">
+                    {Math.round(r.total_estimated_lbs || 0).toLocaleString()} lbs
+                  </span>
+                  <span className="text-xs text-gray-400">{timeAgo(r.rescued_at)}</span>
+                </div>
+              </div>
+              {!isOpen && (
+                <div className="text-xs text-gray-500 ml-6">
+                  {topItems.map((item, j) => (
+                    <span key={j}>
+                      {j > 0 && ' · '}
+                      {item.quantity} {item.unit} {item.name}
+                    </span>
+                  ))}
+                  {moreCount > 0 && <span className="text-gray-400"> +{moreCount} more</span>}
+                </div>
+              )}
+            </button>
+            {isOpen && (
+              <div className="px-4 pb-4 pt-1">
+                <ItemsTable items={r.items} />
+                <RawTextDisclosure rawText={r.raw_text} classification={r.classification || r.source} />
+              </div>
+            )}
+          </div>
+        )
+      })}
     </div>
   )
 }

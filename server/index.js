@@ -10,6 +10,8 @@ import foodLogRoutes from './routes/foodLogs.js'
 import eventRoutes from './routes/events.js'
 import signupRoutes from './routes/signups.js'
 import slackRoutes from './routes/slack.js'
+import slackMessageRoutes from './routes/slackMessages.js'
+import { startSlackSocket } from './services/slackSocket.js'
 
 const app = express()
 const PORT = process.env.PORT || 4000
@@ -55,6 +57,12 @@ if (supabase) {
   app.use('/api/events', eventRoutes(supabase))
   app.use('/api/signups', signupRoutes(supabase))
   app.use('/api/slack', slackRoutes(supabase))
+  app.use('/api/slack-messages', slackMessageRoutes(supabase))
+
+  // Start Slack Socket Mode listener (runs alongside Express)
+  startSlackSocket(supabase).catch(err => {
+    console.error('Slack Socket Mode failed to start:', err.message)
+  })
 } else {
   // Fallback: return 503 for all API routes when no DB
   app.use('/api', (_req, res) => {

@@ -9,13 +9,13 @@ export function MapPage() {
   const [loading, setLoading] = useState(true)
   const [yearFilter, setYearFilter] = useState(null)
   const [selectedLocation, setSelectedLocation] = useState(null)
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(true)
 
   useEffect(() => {
     setLoading(true)
-    fetch('/parsed_data.json')
+    fetch('/api/food-logs?limit=10000')
       .then(r => r.json())
-      .then(setData)
+      .then(result => setData(Array.isArray(result) ? result : result.data || []))
       .catch(err => console.error('Failed to load parsed data:', err))
       .finally(() => setLoading(false))
   }, [])
