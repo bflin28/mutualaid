@@ -1,4 +1,5 @@
 import { Router } from 'express'
+import { requireApiKey } from '../middleware/apiKey.js'
 
 export default function eventRoutes(supabase) {
   const router = Router()
@@ -47,7 +48,7 @@ export default function eventRoutes(supabase) {
   })
 
   // POST /api/events — create a pickup event
-  router.post('/', async (req, res) => {
+  router.post('/', requireApiKey, async (req, res) => {
     try {
       const {
         name,
@@ -63,6 +64,12 @@ export default function eventRoutes(supabase) {
 
       if (!name || !address || !start_time) {
         return res.status(400).json({ error: 'name, address, and start_time are required' })
+      }
+      if (typeof name !== 'string' || name.length > 200) {
+        return res.status(400).json({ error: 'name must be a string (max 200 chars)' })
+      }
+      if (typeof address !== 'string' || address.length > 500) {
+        return res.status(400).json({ error: 'address must be a string (max 500 chars)' })
       }
 
       const { data, error } = await supabase

@@ -1,11 +1,22 @@
 import { useState, useEffect, useMemo } from 'react'
-import { RefreshCw, ChevronDown, ChevronRight, MapPin, Store, Package, ArrowUpDown } from 'lucide-react'
+import { RefreshCw, ChevronDown, ChevronRight, MapPin, Store, Package, ArrowUpDown, Warehouse } from 'lucide-react'
 import { StatCard } from './StatCard'
 
 // Store groups — parent store that groups multiple locations
 const STORE_GROUPS = {
   'Aldi': loc => loc.startsWith('Aldi'),
   "Mariano's": loc => loc.startsWith("Mariano"),
+}
+
+// Slack channel ID → display name mapping
+const SLACK_CHANNELS = {
+  'C026VATTHDE': '#urban-canopy-log',
+  'C031JSTNV6H': '#keystone-log',
+}
+
+function slackChannelName(channelId) {
+  if (!channelId) return null
+  return SLACK_CHANNELS[channelId] || `#${channelId}`
 }
 
 // Warehouse locations are distribution hubs, not rescue sources
@@ -47,11 +58,20 @@ export function StatsDashboard() {
     return [...y].sort()
   }, [data])
 
-  // Filtered data
+  // Filtered data — split into rescue vs inventory
   const filtered = useMemo(() => {
     if (!data) return []
-    if (!yearFilter) return data
-    return data.filter(r => (r.rescued_at || '').startsWith(yearFilter))
+    let d = data
+    if (yearFilter) d = d.filter(r => (r.rescued_at || '').startsWith(yearFilter))
+    return d.filter(r => r.record_type !== 'inventory')
+  }, [data, yearFilter])
+
+  const inventoryData = useMemo(() => {
+    if (!data) return []
+    let d = data
+    if (yearFilter) d = d.filter(r => (r.rescued_at || '').startsWith(yearFilter))
+    return d.filter(r => r.record_type === 'inventory')
+      .sort((a, b) => (b.rescued_at || '').localeCompare(a.rescued_at || ''))
   }, [data, yearFilter])
 
   // Aggregate stats
@@ -273,6 +293,7 @@ export function StatsDashboard() {
           { id: 'overview', label: 'Overview', icon: Package },
           { id: 'store', label: 'By Store', icon: Store },
           { id: 'dropoff', label: 'Drop-offs', icon: MapPin },
+          { id: 'inventory', label: 'Inventory', icon: Warehouse },
         ].map(tab => (
           <button
             key={tab.id}
@@ -479,6 +500,44 @@ export function StatsDashboard() {
           <RescueLogList rescues={dropOffRescues} expandedRows={expandedRows} toggleRow={toggleRow} />
         </div>
       )}
+
+      {/* Inventory tab */}
+      {view === 'inventory' && (
+        <div className="space-y-8">
+          {/* Latest snapshots per warehouse */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+            {['Urban Canopy', 'Keystone'].map(warehouse => {
+              const snapshots = inventoryData.filter(r => r.rescue_location_name === warehouse)
+              const latest = snapshots[0] || null
+              return (
+                <InventorySnapshotCard
+                  key={warehouse}
+                  warehouse={warehouse}
+                  snapshot={latest}
+                  channelId={latest?.slack_channel}
+                />
+              )
+            })}
+          </div>
+
+          {/* All inventory history */}
+          {inventoryData.length > 0 && (
+            <div>
+              <h3 className="text-lg font-medium text-gray-900 mb-3">Inventory History</h3>
+              <p className="text-sm text-gray-500 mb-4">
+                {inventoryData.length} snapshots logged
+              </p>
+              <RescueLogList rescues={inventoryData} expandedRows={expandedRows} toggleRow={toggleRow} />
+            </div>
+          )}
+
+          {inventoryData.length === 0 && (
+            <div className="text-center py-12 text-gray-400">
+              No inventory snapshots yet. Post an inventory message in Slack to get started.
+            </div>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -678,11 +737,22 @@ function ItemsTable({ items }) {
   )
 }
 
-function RawTextDisclosure({ rawText, classification }) {
+function SlackChannelBadge({ channelId }) {
+  const name = slackChannelName(channelId)
+  if (!name) return null
+  return (
+    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-50 text-blue-600 font-medium">
+      {name}
+    </span>
+  )
+}
+
+function RawTextDisclosure({ rawText, classification, slackChannel }) {
   return (
     <details className="text-xs">
-      <summary className="text-gray-400 cursor-pointer hover:text-gray-600">
-        Raw Slack text · {classification}
+      <summary className="text-gray-400 cursor-pointer hover:text-gray-600 flex items-center gap-2">
+        <span>Raw Slack text · {classification}</span>
+        <SlackChannelBadge channelId={slackChannel} />
       </summary>
       <pre className="mt-2 p-3 bg-gray-50 rounded-md text-gray-600 whitespace-pre-wrap break-words max-h-40 overflow-auto border border-gray-100">
         {rawText}
@@ -707,6 +777,7 @@ function SingleRescueCard({ rescue: r, isOpen, onToggle }) {
         {r.drop_off_location_name && (
           <span className="text-xs text-purple-600 shrink-0">→ {r.drop_off_location_name}</span>
         )}
+        <SlackChannelBadge channelId={r.slack_channel} />
         <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 shrink-0">
           {r.items?.length || 0} items
         </span>
@@ -717,7 +788,7 @@ function SingleRescueCard({ rescue: r, isOpen, onToggle }) {
       {isOpen && (
         <div className="px-4 pb-4 pt-1">
           <ItemsTable items={r.items} />
-          <RawTextDisclosure rawText={r.raw_text} classification={r.classification} />
+          <RawTextDisclosure rawText={r.raw_text} classification={r.classification} slackChannel={r.slack_channel} />
         </div>
       )}
     </div>
@@ -743,6 +814,7 @@ function MultiDestRescueCard({ group, isOpen, onToggle }) {
         <span className="text-xs text-purple-600 shrink-0">
           {destinations.map(d => `→ ${d}`).join(' ')}
         </span>
+        <SlackChannelBadge channelId={first.slack_channel} />
         <span className="text-xs px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 shrink-0">
           {group.length} stops
         </span>
@@ -768,6 +840,7 @@ function MultiDestRescueCard({ group, isOpen, onToggle }) {
           <RawTextDisclosure
             rawText={first.raw_text}
             classification={(first.classification || '').replace('_multi', '') + ' (multi-dest)'}
+            slackChannel={first.slack_channel}
           />
         </div>
       )}
@@ -883,6 +956,7 @@ function RecentRescuesFeed({ rescues }) {
                   {r.drop_off_location_name && (
                     <span className="text-xs text-purple-600">→ {r.drop_off_location_name}</span>
                   )}
+                  <SlackChannelBadge channelId={r.slack_channel} />
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500">
@@ -909,12 +983,57 @@ function RecentRescuesFeed({ rescues }) {
             {isOpen && (
               <div className="px-4 pb-4 pt-1">
                 <ItemsTable items={r.items} />
-                <RawTextDisclosure rawText={r.raw_text} classification={r.classification || r.source} />
+                <RawTextDisclosure rawText={r.raw_text} classification={r.classification || r.source} slackChannel={r.slack_channel} />
               </div>
             )}
           </div>
         )
       })}
+    </div>
+  )
+}
+
+function InventorySnapshotCard({ warehouse, snapshot, channelId }) {
+  if (!snapshot) {
+    return (
+      <div className="border rounded-lg p-4 bg-gray-50 border-gray-200">
+        <div className="text-sm font-medium text-gray-900">{warehouse}</div>
+        <div className="text-xs text-gray-400 mt-1">No inventory snapshots</div>
+      </div>
+    )
+  }
+
+  const date = (snapshot.rescued_at || '').slice(0, 10)
+  const itemCount = snapshot.items?.length || 0
+  const topItems = (snapshot.items || []).slice(0, 5)
+
+  return (
+    <div className="border rounded-lg p-4 bg-white border-gray-200 w-full">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Warehouse className="w-4 h-4 text-gray-400" />
+          <span className="text-sm font-semibold text-gray-900">{warehouse}</span>
+          <SlackChannelBadge channelId={channelId} />
+        </div>
+        <span className="text-xs text-gray-400">{date}</span>
+      </div>
+      <div className="text-2xl font-bold text-gray-900">
+        {Math.round(snapshot.total_estimated_lbs || 0).toLocaleString()} lbs
+      </div>
+      <div className="text-xs text-gray-500 mt-1">{itemCount} items on hand</div>
+      <div className="mt-3 space-y-1">
+        {topItems.map((item, i) => (
+          <div key={i} className="flex items-center justify-between text-xs">
+            <span className="text-gray-700">{item.quantity} {item.unit} {item.name}</span>
+            {item.estimated_lbs != null && (
+              <span className="text-gray-400">{Math.round(item.estimated_lbs)} lbs</span>
+            )}
+          </div>
+        ))}
+        {itemCount > 5 && (
+          <div className="text-xs text-gray-400">+{itemCount - 5} more items</div>
+        )}
+      </div>
     </div>
   )
 }

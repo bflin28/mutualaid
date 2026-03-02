@@ -1,8 +1,12 @@
 const API_BASE = ''
+const API_KEY = import.meta.env.VITE_API_KEY || ''
 
 async function request(path, options = {}) {
+  const headers = { 'Content-Type': 'application/json', ...options.headers }
+  if (API_KEY) headers['x-api-key'] = API_KEY
+
   const res = await fetch(`${API_BASE}${path}`, {
-    headers: { 'Content-Type': 'application/json', ...options.headers },
+    headers,
     ...options,
   })
   if (!res.ok) {
@@ -16,10 +20,6 @@ async function request(path, options = {}) {
 export const fetchLocations = (type) =>
   request(`/api/locations${type ? `?type=${type}` : ''}`)
 
-// Food Categories
-export const fetchFoodCategories = () =>
-  request('/api/food-categories')
-
 // Food Logs
 export const createFoodLog = (data) =>
   request('/api/food-logs', { method: 'POST', body: JSON.stringify(data) })
@@ -27,11 +27,6 @@ export const createFoodLog = (data) =>
 export const fetchFoodLogs = (params = {}) => {
   const qs = new URLSearchParams(params).toString()
   return request(`/api/food-logs${qs ? `?${qs}` : ''}`)
-}
-
-export const fetchFoodLogStats = (params = {}) => {
-  const qs = new URLSearchParams(params).toString()
-  return request(`/api/food-logs/stats${qs ? `?${qs}` : ''}`)
 }
 
 export const parseFoodText = (text) =>

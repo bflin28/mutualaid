@@ -215,6 +215,8 @@ async function fetchRecentMessages(oldestDate) {
               rescued_by: msg.user || null,
               items: record.items,
               total_estimated_lbs: record.total_estimated_lbs,
+              record_type: record.record_type || 'rescue',
+              classification: record.classification || null,
               source: 'slack',
               slack_ts: msg.ts,
               slack_channel: channelId,

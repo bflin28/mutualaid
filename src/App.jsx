@@ -12,8 +12,8 @@ export default function App() {
       <Toaster position="top-right" />
       <AppShell>
         <Routes>
-          <Route path="/" element={<FoodLogForm />} />
-          <Route path="/stats" element={<StatsDashboard />} />
+          <Route path="/" element={<StatsDashboard />} />
+          <Route path="/log" element={<FoodLogForm />} />
           <Route path="/signup" element={<SignupPage />} />
           <Route path="/map" element={<MapPage />} />
         </Routes>

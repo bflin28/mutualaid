@@ -76,6 +76,8 @@ CREATE TABLE food_logs (
   total_estimated_lbs NUMERIC(10,1),
   notes TEXT,
   source TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'slack', 'import')),
+  record_type TEXT NOT NULL DEFAULT 'rescue' CHECK (record_type IN ('rescue', 'inventory')),
+  classification TEXT,
   slack_ts TEXT,
   slack_channel TEXT,
   raw_text TEXT,
@@ -86,6 +88,7 @@ CREATE TABLE food_logs (
 CREATE INDEX idx_food_logs_rescued_at ON food_logs(rescued_at DESC);
 CREATE INDEX idx_food_logs_location ON food_logs(rescue_location_name);
 CREATE INDEX idx_food_logs_source ON food_logs(source);
+CREATE INDEX idx_food_logs_record_type ON food_logs(record_type);
 CREATE UNIQUE INDEX idx_food_logs_slack_ts ON food_logs(slack_ts) WHERE slack_ts IS NOT NULL;
 
 -- ============================================================

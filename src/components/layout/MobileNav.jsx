@@ -3,10 +3,10 @@ import { NavLink } from 'react-router-dom'
 import { Leaf, FileText, BarChart3, UserPlus, Map, Menu, X } from 'lucide-react'
 
 const NAV_ITEMS = [
-  { to: '/', icon: FileText, label: 'Log Rescue' },
-  { to: '/stats', icon: BarChart3, label: 'Statistics' },
+  { to: '/', icon: BarChart3, label: 'Statistics' },
+  { to: '/log', icon: FileText, label: 'Log Rescue' },
   { to: '/map', icon: Map, label: 'Map' },
-  { to: '/signup', icon: UserPlus, label: 'Volunteer' },
+  { to: '/signup', icon: UserPlus, label: 'Food Rescue Signup' },
 ]
 
 export function MobileNav() {

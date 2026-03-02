@@ -91,19 +91,30 @@ async function handleMessage(supabase, message, say) {
   // Step 5: Try to resolve locations against DB locations
   const locations = await loadLocations(supabase)
 
+  // Map channel → default drop-off when none is explicit
+  const CHANNEL_DROP_OFF = {
+    'C026VATTHDE': 'Urban Canopy',   // #urban-canopy-log
+    'C031JSTNV6H': 'Keystone',       // #keystone-log
+  }
+
   for (const record of records) {
     const dbLocation = resolveLocation(record.rescue_location_name, locations)
+
+    // Infer drop-off from channel when parser didn't find one
+    const dropOff = record.drop_off_location_name || CHANNEL_DROP_OFF[channel] || null
 
     const { data: log, error: logError } = await supabase
       .from('food_logs')
       .insert({
         rescue_location_id: dbLocation?.id || null,
         rescue_location_name: dbLocation?.name || record.rescue_location_name,
-        drop_off_location_name: record.drop_off_location_name,
+        drop_off_location_name: dropOff,
         rescued_at: new Date(parseFloat(slackTs) * 1000).toISOString(),
         rescued_by: user,
         items: record.items,
         total_estimated_lbs: record.total_estimated_lbs,
+        record_type: record.record_type || 'rescue',
+        classification: record.classification || null,
         source: 'slack',
         slack_ts: slackTs,
         slack_channel: channel,
@@ -143,7 +154,10 @@ async function handleMessage(supabase, message, say) {
 function formatSummary(record) {
   const lines = []
   const loc = record.rescue_location_name
-  if (loc && loc !== 'Unknown') {
+
+  if (record.record_type === 'inventory') {
+    lines.push(`Logged inventory snapshot at *${loc || 'warehouse'}*:`)
+  } else if (loc && loc !== 'Unknown') {
     lines.push(`Logged food rescue from *${loc}*:`)
   } else {
     lines.push('Logged food rescue:')
@@ -166,7 +180,11 @@ function formatSummary(record) {
     lines.push(`  - ${cat}: ~${Math.round(data.lbs)} lbs (${data.items.length} items)`)
   }
 
-  lines.push(`*Total: ~${Math.round(record.total_estimated_lbs)} lbs*`)
+  if (record.record_type === 'inventory') {
+    lines.push(`*Total on hand: ~${Math.round(record.total_estimated_lbs)} lbs (${record.items.length} items)*`)
+  } else {
+    lines.push(`*Total: ~${Math.round(record.total_estimated_lbs)} lbs*`)
+  }
   return lines.join('\n')
 }
 

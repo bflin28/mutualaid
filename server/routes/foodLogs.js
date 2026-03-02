@@ -1,12 +1,13 @@
 import { Router } from 'express'
 import { loadCategories, addCategoryAndWeight } from '../services/categoryDetector.js'
 import { loadLocations, resolveLocation } from '../services/locationResolver.js'
+import { requireApiKey } from '../middleware/apiKey.js'
 
 export default function foodLogRoutes(supabase) {
   const router = Router()
 
   // POST /api/food-logs — create a food log entry
-  router.post('/', async (req, res) => {
+  router.post('/', requireApiKey, async (req, res) => {
     try {
       const {
         rescue_location,
@@ -16,13 +17,25 @@ export default function foodLogRoutes(supabase) {
         items = [],
         notes,
         source = 'manual',
+        record_type = 'rescue',
+        classification,
         slack_ts,
         slack_channel,
         raw_text,
       } = req.body
 
+      // Input validation
       if (!rescue_location || !rescued_at) {
         return res.status(400).json({ error: 'rescue_location and rescued_at are required' })
+      }
+      if (!Array.isArray(items) || items.length === 0) {
+        return res.status(400).json({ error: 'items must be a non-empty array' })
+      }
+      if (record_type && !['rescue', 'inventory'].includes(record_type)) {
+        return res.status(400).json({ error: 'record_type must be "rescue" or "inventory"' })
+      }
+      if (isNaN(Date.parse(rescued_at))) {
+        return res.status(400).json({ error: 'rescued_at must be a valid date string' })
       }
 
       const [categories, locations] = await Promise.all([
@@ -47,6 +60,8 @@ export default function foodLogRoutes(supabase) {
         total_estimated_lbs: Math.round(totalLbs * 10) / 10,
         notes: notes || null,
         source,
+        record_type,
+        classification: classification || null,
         slack_ts: slack_ts || null,
         slack_channel: slack_channel || null,
         raw_text: raw_text || null,
@@ -74,6 +89,7 @@ export default function foodLogRoutes(supabase) {
         offset = 0,
         location,
         source,
+        record_type,
         start_date,
         end_date,
       } = req.query
@@ -86,6 +102,7 @@ export default function foodLogRoutes(supabase) {
 
       if (location) query = query.eq('rescue_location_name', location)
       if (source) query = query.eq('source', source)
+      if (record_type) query = query.eq('record_type', record_type)
       if (start_date) query = query.gte('rescued_at', start_date)
       if (end_date) query = query.lte('rescued_at', end_date + 'T23:59:59')
 
@@ -98,96 +115,31 @@ export default function foodLogRoutes(supabase) {
     }
   })
 
-  // GET /api/food-logs/stats — aggregated statistics
-  router.get('/stats', async (req, res) => {
+  // GET /api/food-logs/inventory-latest — most recent inventory snapshot per warehouse
+  router.get('/inventory-latest', async (req, res) => {
     try {
-      const { start_date, end_date, location } = req.query
-
-      let query = supabase.from('food_logs').select('*')
-      if (location) query = query.eq('rescue_location_name', location)
-      if (start_date) query = query.gte('rescued_at', start_date)
-      if (end_date) query = query.lte('rescued_at', end_date + 'T23:59:59')
-
-      const { data: logs, error } = await query
-      if (error) throw error
-
-      // Calculate stats
-      const now = new Date()
-      const oneWeekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
-      const twoWeeksAgo = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000)
-
-      const totalLbs = logs.reduce((sum, l) => sum + (Number(l.total_estimated_lbs) || 0), 0)
-      const totalRescues = logs.length
-
-      const thisWeekLogs = logs.filter(l => new Date(l.rescued_at) >= oneWeekAgo)
-      const lastWeekLogs = logs.filter(l => {
-        const d = new Date(l.rescued_at)
-        return d >= twoWeeksAgo && d < oneWeekAgo
-      })
-
-      const thisWeekLbs = thisWeekLogs.reduce((s, l) => s + (Number(l.total_estimated_lbs) || 0), 0)
-      const lastWeekLbs = lastWeekLogs.reduce((s, l) => s + (Number(l.total_estimated_lbs) || 0), 0)
-      const trend = lastWeekLbs > 0
-        ? Math.round(((thisWeekLbs - lastWeekLbs) / lastWeekLbs) * 1000) / 10
-        : 0
-
-      // By location
-      const byLocationMap = {}
-      for (const log of logs) {
-        const name = log.rescue_location_name
-        if (!byLocationMap[name]) byLocationMap[name] = { name, lbs: 0, count: 0 }
-        byLocationMap[name].lbs += Number(log.total_estimated_lbs) || 0
-        byLocationMap[name].count++
+      const warehouses = ['Urban Canopy', 'Keystone']
+      const results = {}
+      for (const wh of warehouses) {
+        const { data } = await supabase
+          .from('food_logs')
+          .select('*')
+          .eq('record_type', 'inventory')
+          .eq('rescue_location_name', wh)
+          .order('rescued_at', { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (data) results[wh] = data
       }
-      const byLocation = Object.values(byLocationMap).sort((a, b) => b.lbs - a.lbs)
-
-      // By category
-      const byCategoryMap = {}
-      for (const log of logs) {
-        for (const item of log.items || []) {
-          const cat = item.gcfd_category || 'Uncategorized'
-          if (!byCategoryMap[cat]) byCategoryMap[cat] = { category: cat, lbs: 0 }
-          byCategoryMap[cat].lbs += Number(item.estimated_lbs) || 0
-        }
-      }
-      const byCategory = Object.values(byCategoryMap).sort((a, b) => b.lbs - a.lbs)
-
-      // Weekly trend (last 12 weeks)
-      const weeklyTrend = []
-      for (let i = 11; i >= 0; i--) {
-        const weekStart = new Date(now.getTime() - (i + 1) * 7 * 24 * 60 * 60 * 1000)
-        const weekEnd = new Date(now.getTime() - i * 7 * 24 * 60 * 60 * 1000)
-        const weekLbs = logs
-          .filter(l => {
-            const d = new Date(l.rescued_at)
-            return d >= weekStart && d < weekEnd
-          })
-          .reduce((s, l) => s + (Number(l.total_estimated_lbs) || 0), 0)
-        weeklyTrend.push({
-          week: weekStart.toISOString().slice(0, 10),
-          lbs: Math.round(weekLbs),
-        })
-      }
-
-      res.json({
-        totalLbs: Math.round(totalLbs),
-        totalRescues,
-        thisWeekLbs: Math.round(thisWeekLbs),
-        thisWeekCount: thisWeekLogs.length,
-        lastWeekLbs: Math.round(lastWeekLbs),
-        trend,
-        byLocation,
-        byCategory,
-        weeklyTrend,
-      })
+      res.json(results)
     } catch (err) {
-      console.error('GET /api/food-logs/stats error:', err.message)
-      res.status(500).json({ error: 'Failed to compute stats' })
+      console.error('GET /api/food-logs/inventory-latest error:', err.message)
+      res.status(500).json({ error: 'Failed to fetch latest inventory' })
     }
   })
 
   // POST /api/food-logs/parse — parse pasted text into structured items
-  router.post('/parse', async (req, res) => {
+  router.post('/parse', requireApiKey, async (req, res) => {
     try {
       const { text } = req.body
       if (!text) return res.status(400).json({ error: 'text is required' })

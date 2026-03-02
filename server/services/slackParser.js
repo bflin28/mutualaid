@@ -175,6 +175,12 @@ const COMPOUND_PATTERN = new RegExp(
   `^${BULLET_PREFIX}~?(\\d+)\\s+(\\d+)[-\\s]?(${UNIT_WORDS})\\s+(?:of\\s+)?(.+)`, 'i'
 )
 
+// Reverse pattern: "Creamed Corn: 11 trays (24 cans per tray)"
+// Captures: (1) item name before colon, (2) quantity, (3) unit
+const REVERSE_UNIT_PATTERN = new RegExp(
+  `^${BULLET_PREFIX}(.+?)\\s*:\\s*~?(\\d+\\.?\\d*)\\s*${MODIFIER}(${UNIT_WORDS})\\b`, 'i'
+)
+
 // ============================================================
 // Word quantity conversion
 // ============================================================
@@ -327,9 +333,10 @@ function splitInlineItems(text) {
 // ============================================================
 // Main parser — parses text into structured items array
 // ============================================================
-export function parseItemsFromText(text) {
-  // First try splitting inline items (handles single-line lists)
-  const expanded = splitInlineItems(text)
+export function parseItemsFromText(text, { inventoryMode = false } = {}) {
+  // In inventory mode, items are already on separate lines — don't split
+  // In rescue mode, split inline items (handles "3 cases produce 2 cases dairy")
+  const expanded = inventoryMode ? text : splitInlineItems(text)
   const lines = expanded.split('\n')
   const items = []
 
@@ -384,6 +391,45 @@ export function parseItemsFromText(text) {
         const estimated_lbs = estimateWeight(quantity, fallbackUnit, cat, name)
         items.push({ name, quantity, unit: fallbackUnit, gcfd_category: cat.name, estimated_lbs })
       }
+      continue
+    }
+
+    // Reverse pattern: "Name: quantity unit (notes)"
+    // e.g. "Creamed Corn: 11 trays (24 cans per tray)"
+    const reverseMatch = line.match(REVERSE_UNIT_PATTERN)
+    if (reverseMatch) {
+      const name = cleanItemName(reverseMatch[1])
+      const quantity = parseFloat(reverseMatch[2])
+      const unit = normalizeUnit(reverseMatch[3])
+      if (name.length >= 2) {
+        const cat = detectCategory(name)
+        // Accept if category recognized OR we're in inventory mode
+        if (cat || inventoryMode) {
+          const estimated_lbs = estimateWeight(quantity, unit, cat, name)
+          items.push({ name, quantity, unit, gcfd_category: cat?.name || null, estimated_lbs })
+          continue
+        }
+      }
+    }
+
+    // Inventory mode: bare item names without quantities — log the item but no weight estimate
+    if (inventoryMode) {
+      const bare = trimmed.replace(/^[-•*\[\]~\s]+/, '').trim()
+      if (!bare || bare.length < 2) continue
+      // Skip section headers / meta-text
+      if (/^(?:in\s+(?:dry|cold|cooler|freezer)|(?:at\s+)?(?:uc|urban canopy|keystone)\s+going|going into|here'?s what|what we have|inventory|keystone\b|urban canopy\b|uc\b|warehouse|good variety|sorting|on hand|at uc\b|at urban canopy\b|dry\s*:|cold\s*:|cooler\s*:|freezer\s*:)/i.test(bare)) continue
+      // Skip lines that look like descriptions, not items
+      if (/^(?:need sorting|regular and|still)\b/i.test(bare)) continue
+      // "lots of X" → extract item name
+      const lotsMatch = bare.match(/^(?:lots of|tons of|some)\s+(.+)/i)
+      const rawName = lotsMatch ? lotsMatch[1].replace(/\s+(?:still|left|remaining|too)\s*$/i, '') : bare
+      // Strip parenthetical notes like "(need sorting)", "(tons!)", "(regular and blood orange)"
+      const cleanBare = rawName.replace(/\s*\(.*?\)\s*/g, '').replace(/\s*!+\s*/g, '').trim()
+      if (!cleanBare || cleanBare.length < 2) continue
+      const name = cleanItemName(cleanBare)
+      const cat = detectCategory(name)
+      // Log the item with no quantity/weight — just a name for the snapshot
+      items.push({ name, quantity: null, unit: null, gcfd_category: cat?.name || null, estimated_lbs: null })
     }
   }
 
@@ -492,6 +538,7 @@ const RESCUE_LOCATIONS = {
   'Lollapalooza': ['lollapalooza', 'lolla'],
   'West Suburbs Community Pantry': ['west suburbs community pantry', 'wesr suburbs community pantry', 'ws community pantry'],
   '827 S Pulaski': ['827 s pulaski', '817 s pulaski'],
+  'Nourishing Hope': ['nourishing hope'],
 }
 
 const DROP_OFF_LOCATIONS = {
@@ -544,6 +591,65 @@ export function matchTakerOrg(text) {
 }
 
 // ============================================================
+// Inventory detection
+// ============================================================
+const INVENTORY_POSITIVE = [
+  /\binventory\b/i,
+  /\bon hand\b/i,
+  /\bgoing into the weekend\b/i,
+  /\bwhat we have\b/i,
+  /\bwhat'?s\s+(?:left|available|on hand)\b/i,
+  /\bcurrently\s+(?:have|on hand|stocked)\b/i,
+  /\bin\s+(?:stock|the warehouse|the cooler|the freezer|cold storage|dry storage|dry rack)\b/i,
+  /\bstill have\b/i,
+  /\bremaining\b/i,
+  /\bavailable\s+(?:at|for)\b/i,
+  /\b(?:north|south|east|west)\s+wall\b/i,
+  /\bdry goods inventory\b/i,
+  /\bfreezer inventory\b/i,
+  /\bcooler inventory\b/i,
+  /\bhere'?s what\b/i,
+  /\bwhat'?s in\b/i,
+]
+
+const RESCUE_NEGATIVE = [
+  /\b(?:picked up|rescued|scooped|grabbed)\s+(?:\S+\s+){0,3}(?:from|at)\b/i,
+  /\b(?:dropped off|delivered|took to|brought to)\b/i,
+  /\bdropped\s+from\b/i,
+  /\btook\s*:/i,
+  /\breceived\s+(?:on|from|at|today|yesterday|last)\b/i,
+  /\b(?:excess\s+)?rescue\s+from\b/i,
+  /\bpallets?\s+(?:excess\s+)?rescue\b/i,
+]
+
+// Messages that should never be classified as inventory (or rescue)
+const NON_FOOD_LOG = [
+  /\bproposed purchase\b/i,
+  /\bpurchase\s+for\s+this\s+week\b/i,
+  /\bpurchase order\b/i,
+  /\border form\b/i,
+  /\bwhat I ordered\b/i,
+  /\bordered\b.*\$\d/i,           // "ordered" + dollar amounts
+  /\$\d.*\bordered\b/i,           // dollar amounts + "ordered"
+  /\btotal\s*[=:]\s*\$\d/i,       // "Total= $1,328" or "Total: $500"
+]
+
+function isInventoryMessage(text) {
+  // Filter out non-food-log messages (proposed purchases, etc.)
+  if (NON_FOOD_LOG.some(rx => rx.test(text))) return false
+  const hasPositive = INVENTORY_POSITIVE.some(rx => rx.test(text))
+  if (!hasPositive) return false
+  const hasRescueLanguage = RESCUE_NEGATIVE.some(rx => rx.test(text))
+  if (hasRescueLanguage) return false
+  const mentionsWarehouse = /\b(uc|urban canopy|keystone|2311)\b/i.test(text)
+  if (!mentionsWarehouse) return false
+  // Long prose without bullet points / line breaks is not an inventory list
+  const hasList = /[•*-]\s+\w|^\s*\w+\s*$/m.test(text) || text.split('\n').length >= 4
+  if (!hasList && text.length > 200) return false
+  return true
+}
+
+// ============================================================
 // Message classification
 // ============================================================
 export function classifyMessage(text) {
@@ -552,6 +658,19 @@ export function classifyMessage(text) {
   let rescueLocation = null
   let dropOffLocation = null
   let classification = 'unknown'
+
+  // Step -2: Skip non-food-log messages (proposed purchases, order forms, etc.)
+  if (NON_FOOD_LOG.some(rx => rx.test(lower))) {
+    return { rescueLocation: null, dropOffLocation: null, classification: 'non_food_log' }
+  }
+
+  // Step -1: Inventory detection — catch warehouse inventory snapshots early
+  if (isInventoryMessage(lower)) {
+    if (/\bkeystone\b/i.test(lower)) {
+      return { rescueLocation: 'Keystone', dropOffLocation: null, classification: 'inventory' }
+    }
+    return { rescueLocation: 'Urban Canopy', dropOffLocation: null, classification: 'inventory' }
+  }
 
   // Step 0: "[Org] picked up from [Location]" — org is the actor, not the destination
   // e.g. "SWC picked up from SL Mariano's on Tuesday:" → rescue from Mariano's South Loop
@@ -930,11 +1049,14 @@ export function processMessageText(text) {
   const records = []
 
   for (const section of sections) {
-    const items = parseItemsFromText(section)
-    if (items.length === 0) continue
-
     const { rescueLocation, dropOffLocation, classification } = classifyMessage(section)
+    if (classification === 'non_food_log') continue
     const defaultDropOff = dropOffLocation || null
+    const record_type = classification === 'inventory' ? 'inventory' : 'rescue'
+    const inventoryMode = classification === 'inventory'
+
+    const items = parseItemsFromText(section, { inventoryMode })
+    if (items.length === 0) continue
 
     // Try multi-destination split
     const splits = splitByDropOff(section, defaultDropOff || 'Urban Canopy')
@@ -947,6 +1069,7 @@ export function processMessageText(text) {
           items: split.items,
           total_estimated_lbs: Math.round(totalLbs * 10) / 10,
           classification,
+          record_type,
           raw_text: split.rawText,
         })
       }
@@ -958,6 +1081,7 @@ export function processMessageText(text) {
         items,
         total_estimated_lbs: Math.round(totalLbs * 10) / 10,
         classification,
+        record_type,
         raw_text: section,
       })
     }
