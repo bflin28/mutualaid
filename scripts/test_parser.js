@@ -643,6 +643,56 @@ if (mod.splitSections) {
   assert('no drop-off returns null', mod.splitByDropOff(noDropOff, "Mariano's", 'Urban Canopy'), null)
 }
 
+// ── classifyMessage (from canonical slackParser.js) ──────────
+console.log('\n── classifyMessage ──')
+
+const { classifyMessage } = await import('../server/services/slackParser.js')
+
+// Test: items first, then "SWC scooped this from X and took to Y" at bottom
+{
+  const text = '10 crates dairy\n12 banana boxes of frozen meats & bread loaves\n\nSWC scooped this from SL Mariano\u2019s and took to port & Pulaski fridges'
+  const result = classifyMessage(text)
+  assert('items-first: rescue = Mariano\'s South Loop', result.rescueLocation, "Mariano's South Loop")
+  assert('items-first: drop-off is set', result.dropOffLocation != null, true)
+  assert('items-first: class = explicit_rescue', result.classification, 'explicit_rescue')
+}
+
+// Test: standard "SWC scooped from X" at top of message
+{
+  const result = classifyMessage('SWC scooped from SL Mariano\u2019s today (Tuesday):\n\n\u2022 5 deli\n\u2022 6 Frozen\n\u2022 8 Dairy')
+  assert('swc-scooped: rescue = Mariano\'s South Loop', result.rescueLocation, "Mariano's South Loop")
+  assert('swc-scooped: class = explicit_rescue', result.classification, 'explicit_rescue')
+}
+
+// Test: "SWC picked up from X" still works
+{
+  const result = classifyMessage('SWC picked up from Aldi Wicker Park:\n5 cases produce')
+  assert('swc-pickup: rescue = Aldi Wicker Park', result.rescueLocation, 'Aldi Wicker Park')
+  assert('swc-pickup: class = explicit_rescue', result.classification, 'explicit_rescue')
+}
+
+// Test: "SWC took:" is still warehouse_distribution
+{
+  const result = classifyMessage('SWC took:\n5 cases produce\n3 dairy')
+  assert('swc-took: rescue = Urban Canopy', result.rescueLocation, 'Urban Canopy')
+  assert('swc-took: drop = SWC', result.dropOffLocation, 'SWC')
+  assert('swc-took: class = warehouse_distribution', result.classification, 'warehouse_distribution')
+}
+
+// Test: "scooped this from" with filler word "this"
+{
+  const result = classifyMessage('SWC scooped this from Aldi Hodgkins:\n4 cases produce')
+  assert('scooped-this: rescue = Aldi Hodgkins', result.rescueLocation, 'Aldi Hodgkins')
+  assert('scooped-this: class = explicit_rescue', result.classification, 'explicit_rescue')
+}
+
+// Test: "picked up from X, dropped off at Y"
+{
+  const result = classifyMessage('SWC picked up from Aldi Wicker Park dropped off @ UC:\n5 cases produce')
+  assert('pickup-dropoff: rescue = Aldi Wicker Park', result.rescueLocation, 'Aldi Wicker Park')
+  assert('pickup-dropoff: drop = Urban Canopy', result.dropOffLocation, 'Urban Canopy')
+}
+
 // ── Summary ──────────────────────────────────────────────────
 console.log('\n════════════════════════════════════════')
 console.log(`Results: ${passed} passed, ${failed} failed`)

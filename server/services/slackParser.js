@@ -440,7 +440,7 @@ export function parseItemsFromText(text, { inventoryMode = false } = {}) {
 // Location matching (taker orgs + rescue sources)
 // ============================================================
 const TAKER_ORGS = [
-  { name: 'Love Fridge', patterns: ['love fridge', 'love fridges', 'la michoacana', 'lovefridge', 'lf took', 'lie fridge', 'live fridge', 'love shack'] },
+  { name: 'Love Fridge', patterns: ['love fridge', 'love fridges', 'la michoacana', 'lovefridge', 'lf took', 'lie fridge', 'live fridge', 'love shack', 'pulaski fridge', 'pulaski fridges'] },
   { name: 'BKMA', patterns: ['bkma', 'back of the yards'] },
   { name: 'SWC', patterns: ['swc'] },
   { name: 'WSMA', patterns: ['wsma', 'west side mutual aid', 'westside ma', 'westside mutual', 'west side ma'] },
@@ -675,8 +675,9 @@ export function classifyMessage(text) {
   // Step 0: "[Org] picked up from [Location]" — org is the actor, not the destination
   // e.g. "SWC picked up from SL Mariano's on Tuesday:" → rescue from Mariano's South Loop
   // Also handles: "me and others from SWC picked up from Marillac:"
+  // Also handles mid-message: "10 crates dairy\nSWC scooped this from SL Mariano's and took to X"
   // Does NOT apply when the source is a warehouse (UC/Keystone) — that's Step 1 territory
-  const orgPickedFromMatch = lower.match(/(?:^|from\s+)(\w[\w\s&/.'-]*?)\s+(?:picked up|rescued|grabbed|scooped)\s+(?:from|at)\s+(.+?)(?:\s+on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|yesterday)\b.*?)?(?:[:\n]|dropped\s+off)/i)
+  const orgPickedFromMatch = lower.match(/(?:^|\n)\s*(?:from\s+)?(\w[\w\s&/.'-]*?)\s+(?:picked up|rescued|grabbed|scooped)\s+(?:(?:this|it|everything|stuff)\s+)?(?:from|at)\s+(.+?)(?:\s+on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|yesterday)\b.*?)?(?:[:\n,]|\s+and\s+(?:took|dropped|delivered)|dropped\s+off|\s*$)/im)
   if (orgPickedFromMatch) {
     const orgName = orgPickedFromMatch[1].trim()
     const locationText = orgPickedFromMatch[2].trim()
@@ -686,8 +687,8 @@ export function classifyMessage(text) {
     if (resolved && !/^(Urban Canopy|Keystone)$/i.test(resolved)) {
       rescueLocation = resolved
       classification = 'explicit_rescue'
-      // Check for drop-off: "Took to X", "dropped off @ X", "dropped off at X"
-      const dropMatch = lower.match(/(?:took to|delivered to|dropped\s+(?:off\s+)?(?:at|to|@))\s+(.+?)(?:\s*$|\s*\n)/im)
+      // Check for drop-off: "Took to X", "dropped off @ X", "dropped off at X", "and took to X"
+      const dropMatch = lower.match(/(?:(?:and\s+)?took\s+to|delivered\s+to|dropped\s+(?:off\s+)?(?:at|to|@))\s+(.+?)(?:\s*$|\s*\n)/im)
       if (dropMatch) {
         const dropResolved = matchDropOffLocation(dropMatch[1].trim())
         if (dropResolved) dropOffLocation = dropResolved
