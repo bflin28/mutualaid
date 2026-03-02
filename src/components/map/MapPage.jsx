@@ -121,6 +121,7 @@ export function MapPage() {
         flows={flows}
         selectedLocation={selectedLocation}
         onSelectLocation={setSelectedLocation}
+        onViewOnMap={() => setPanelOpen(false)}
       />
     </div>
   )

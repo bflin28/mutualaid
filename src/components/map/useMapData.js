@@ -44,16 +44,22 @@ export function useMapData(records, yearFilter) {
       totalLbs += lbs
       totalTrips++
 
+      const dateStr = record.rescued_at || null
+
       // Update rescue source totals
       if (!locationTotals[from]) {
         locationTotals[from] = {
           totalLbs: 0, tripCount: 0,
           type: LOCATIONS[from]?.type || 'rescue',
           categories: {},
+          lastDate: null,
         }
       }
       locationTotals[from].totalLbs += lbs
       locationTotals[from].tripCount++
+      if (dateStr && (!locationTotals[from].lastDate || dateStr > locationTotals[from].lastDate)) {
+        locationTotals[from].lastDate = dateStr
+      }
 
       // Update drop-off totals
       if (to) {
@@ -62,10 +68,14 @@ export function useMapData(records, yearFilter) {
             totalLbs: 0, tripCount: 0,
             type: LOCATIONS[to]?.type || 'distribution',
             categories: {},
+            lastDate: null,
           }
         }
         locationTotals[to].totalLbs += lbs
         locationTotals[to].tripCount++
+        if (dateStr && (!locationTotals[to].lastDate || dateStr > locationTotals[to].lastDate)) {
+          locationTotals[to].lastDate = dateStr
+        }
 
         // Build flow
         const flowKey = `${from}→${to}`

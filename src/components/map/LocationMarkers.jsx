@@ -109,6 +109,12 @@ export function LocationMarkers({ locationTotals, selectedLocation, connectedLoc
                   <div className="font-semibold text-white">{formatLbs(data.totalLbs)}</div>
                   <div className="text-slate-400">Trips</div>
                   <div className="font-semibold text-white">{data.tripCount}</div>
+                  {data.lastDate && (
+                    <>
+                      <div className="text-slate-400">Last event</div>
+                      <div className="font-semibold text-white">{new Date(data.lastDate).toLocaleDateString()}</div>
+                    </>
+                  )}
                 </div>
                 {topCategories.length > 0 && (
                   <div className="border-t border-white/10 pt-2 mt-2">

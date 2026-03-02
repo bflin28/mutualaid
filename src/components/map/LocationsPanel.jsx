@@ -1,5 +1,5 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react'
-import { X, Search, ChevronDown, ChevronRight, ArrowUpRight, ArrowDownLeft, ArrowUpDown } from 'lucide-react'
+import { X, Search, ChevronDown, ChevronRight, ArrowUpRight, ArrowDownLeft, ArrowUpDown, MapPin } from 'lucide-react'
 import LOCATIONS from '../../data/locationCoordinates'
 
 const TYPE_COLORS = {
@@ -19,7 +19,7 @@ function formatLbs(lbs) {
   return Math.round(lbs).toLocaleString()
 }
 
-export function LocationsPanel({ open, onClose, locationTotals, flows, selectedLocation, onSelectLocation }) {
+export function LocationsPanel({ open, onClose, locationTotals, flows, selectedLocation, onSelectLocation, onViewOnMap }) {
   const [search, setSearch] = useState('')
   const [sortCol, setSortCol] = useState('totalLbs')
   const [sortDir, setSortDir] = useState('desc')
@@ -37,6 +37,7 @@ export function LocationsPanel({ open, onClose, locationTotals, flows, selectedL
         tripCount: data.tripCount,
         address: coords?.address || null,
         categories: data.categories || {},
+        lastDate: data.lastDate || null,
       }
     })
   }, [locationTotals])
@@ -105,10 +106,19 @@ export function LocationsPanel({ open, onClose, locationTotals, flows, selectedL
     })
   }
 
-  // Handle row click — select on map + toggle expansion
+  // Handle row click — toggle expansion (and select on desktop)
   const handleRowClick = (name) => {
-    onSelectLocation(selectedLocation === name ? null : name)
+    // On desktop, also select on map. On mobile, just expand.
+    if (window.innerWidth >= 768) {
+      onSelectLocation(selectedLocation === name ? null : name)
+    }
     toggleExpanded(name)
+  }
+
+  // "View on Map" — select location, close panel (mobile)
+  const handleViewOnMap = (name) => {
+    onSelectLocation(name)
+    if (onViewOnMap) onViewOnMap(name)
   }
 
   // Auto-scroll to selected location when map marker is clicked
@@ -237,6 +247,7 @@ export function LocationsPanel({ open, onClose, locationTotals, flows, selectedL
                   isSelected={isSelected}
                   isExpanded={isExpanded}
                   onRowClick={handleRowClick}
+                  onViewOnMap={handleViewOnMap}
                   getConnectionsFor={getConnectionsFor}
                   onSelectLocation={onSelectLocation}
                   rowRef={el => { rowRefs.current[loc.name] = el }}
@@ -257,7 +268,7 @@ export function LocationsPanel({ open, onClose, locationTotals, flows, selectedL
   )
 }
 
-function LocationRow({ loc, color, isSelected, isExpanded, onRowClick, getConnectionsFor, onSelectLocation, rowRef }) {
+function LocationRow({ loc, color, isSelected, isExpanded, onRowClick, onViewOnMap, getConnectionsFor, onSelectLocation, rowRef }) {
   const { inbound, outbound } = isExpanded ? getConnectionsFor(loc.name) : { inbound: [], outbound: [] }
   const totalConnections = isExpanded ? inbound.length + outbound.length : 0
 
@@ -305,12 +316,32 @@ function LocationRow({ loc, color, isSelected, isExpanded, onRowClick, getConnec
         <tr>
           <td colSpan={4} className="px-4 py-3" style={{ background: 'rgba(15, 23, 42, 0.6)' }}>
             <div className="space-y-3">
-              {/* Address */}
-              {loc.address && (
-                <div className="text-xs text-slate-500 flex items-center gap-1">
-                  📍 {loc.address}
+              {/* Address + last date */}
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-xs text-slate-500 truncate">
+                  {loc.address && <span>📍 {loc.address}</span>}
                 </div>
-              )}
+                {loc.lastDate && (
+                  <div className="text-[10px] text-slate-500 shrink-0">
+                    Last: {new Date(loc.lastDate).toLocaleDateString()}
+                  </div>
+                )}
+              </div>
+
+              {/* View on Map button — mobile only */}
+              <button
+                onClick={(e) => {
+                  e.stopPropagation()
+                  onViewOnMap(loc.name)
+                }}
+                className="md:hidden w-full flex items-center justify-center gap-2 px-3 py-2
+                  rounded-lg text-xs font-medium
+                  bg-sky-500/20 text-sky-300 border border-sky-500/30
+                  active:bg-sky-500/30 transition-colors"
+              >
+                <MapPin className="w-3.5 h-3.5" />
+                View on Map
+              </button>
 
               {/* Top categories */}
               {Object.keys(loc.categories).length > 0 && (
