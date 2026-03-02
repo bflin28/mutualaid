@@ -641,6 +641,26 @@ function classifyMessage(text) {
   let dropOffLocation = null
   let classification = 'unknown'
 
+  // ----- Step 0: "[Org] picked up from [Location]" — org is the actor, not the destination -----
+  // e.g. "SWC picked up from SL Mariano's on Tuesday:" → rescue from Mariano's South Loop
+  // Does NOT apply when the source is a warehouse (UC/Keystone) — that's Step 1 territory
+  const orgPickedFromMatch = lower.match(/(?:^|from\s+)(\w[\w\s&/.'-]*?)\s+(?:picked up|rescued|grabbed|scooped)\s+(?:from|at)\s+(.+?)(?:\s+on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|yesterday)\b.*?)?(?:[:\n]|dropped\s+off)/i)
+  if (orgPickedFromMatch) {
+    const orgName = orgPickedFromMatch[1].trim()
+    const locationText = orgPickedFromMatch[2].trim()
+    const resolved = matchRescueLocation(locationText)
+    if (resolved && !/^(Urban Canopy|Keystone)$/i.test(resolved)) {
+      rescueLocation = resolved
+      classification = 'explicit_rescue'
+      const dropMatch = lower.match(/(?:took to|delivered to|dropped\s+(?:off\s+)?(?:at|to|@))\s+(.+?)(?:\s*$|\s*\n)/im)
+      if (dropMatch) {
+        const dropResolved = matchDropOffLocation(dropMatch[1].trim())
+        if (dropResolved) dropOffLocation = dropResolved
+      }
+      return { rescueLocation, dropOffLocation, classification }
+    }
+  }
+
   // ----- Step 1: Check for "X took:" pattern (warehouse distribution) -----
   // Also handle multiline "Avondale\ngrabbed:" and "sited took:" (typo for "site took")
   const tookMatch = lower.match(/^(\w[\w\s&/.'-]*?)\s*\n?\s*(?:took|grabbed|picked up|scooped|is taking|taking|sited took)[:\s]/i)
