@@ -51,7 +51,6 @@ const LOCATIONS = {
   'San Lucas': { lat: 41.9100, lng: -87.6980, type: 'rescue', address: '2914 W North Ave' },
   'Uptown Baptist Church': { lat: 41.9660, lng: -87.6560, type: 'rescue' },
   'Irving Park Food Pantry': { lat: 41.9550, lng: -87.7233, type: 'rescue', address: '4256 N Ridgeway Ave' },
-  'IPCFP': { lat: 41.9550, lng: -87.7233, type: 'rescue', address: '4256 N Ridgeway Ave' },
   'New Life GAP': { lat: 41.9620, lng: -87.7250, type: 'rescue', address: '4540 N Hamlin Ave' },
   'Friendship Center': { lat: 41.9500, lng: -87.6800, type: 'rescue' },
   'Global Refugee Farm': { lat: 41.9700, lng: -87.7400, type: 'rescue' },

@@ -196,7 +196,7 @@ const RESCUE_LOCATIONS = {
   "What's Good Food": ['whats good', "what's good"],
   'Friendship Center': ['friendship center', 'friendship pick up', 'friendship pickup'],
   'CNO Financial': ['cno financial', 'cno'],
-  'IPCFP': ['ipcfp'],
+  // IPCFP merged into Irving Park Food Pantry
   'Walmart': ['walmart'],
   'Green City Market': ['green city market', 'green city', 'gcm'],
   "Dorothy's Bakery": ['dorothy', "dorothy's bakery"],
@@ -210,7 +210,7 @@ const RESCUE_LOCATIONS = {
   'South Loop Farmers Market': ['south loop farmers', 'south loop market'],
   'Produce Market': ['produce market'],
   'Farm Link Project': ['farm link', 'farmlink'],
-  'Irving Park Food Pantry': ['irving park', 'irving park pantry', 'irving park food pantry', 'ipfrc', 'icfp', 'irving park community'],
+  'Irving Park Food Pantry': ['irving park', 'irving park pantry', 'irving park food pantry', 'ipfrc', 'icfp', 'irving park community', 'ipcfp'],
   'Uptown Baptist Church': ['uptown baptist'],
   'New Life GAP': ['new life gap', 'new life'],
   'Lollapalooza': ['lollapalooza', 'lolla'],
