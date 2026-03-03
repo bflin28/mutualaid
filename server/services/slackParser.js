@@ -676,8 +676,10 @@ export function classifyMessage(text) {
   // e.g. "SWC picked up from SL Mariano's on Tuesday:" → rescue from Mariano's South Loop
   // Also handles: "me and others from SWC picked up from Marillac:"
   // Also handles mid-message: "10 crates dairy\nSWC scooped this from SL Mariano's and took to X"
+  // Also handles day words: "SWC picked up today from X", "SWC picked up on Wednesday from X"
+  // Also handles "took from": "SWC took from Aldi Hodgkins:" (but NOT "SWC took:" which is Step 1)
   // Does NOT apply when the source is a warehouse (UC/Keystone) — that's Step 1 territory
-  const orgPickedFromMatch = lower.match(/(?:^|\n)\s*(?:from\s+)?(\w[\w\s&/.'-]*?)\s+(?:picked up|rescued|grabbed|scooped)\s+(?:(?:this|it|everything|stuff)\s+)?(?:from|at)\s+(.+?)(?:\s+on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|yesterday)\b.*?)?(?:[:\n,]|\s+and\s+(?:took|dropped|delivered)|dropped\s+off|\s*$)/im)
+  const orgPickedFromMatch = lower.match(/(?:^|\n)\s*(?:from\s+)?(\w[\w\s&/.'-]*?)\s+(?:picked up|pick up|rescued|grabbed|scooped|took)(?:\s+(?:today|yesterday|(?:on\s+)?(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)(?:\s+\d+[-/]\d+)?))?(?:\s+(?:this|it|everything|stuff))?\s+(?:from|at)\s+(.+?)(?:\s+on\s+(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|yesterday)\b.*?)?(?:[:\n,]|\s+and\s+(?:took|dropped|delivered)|dropped\s+off|\s*$)/im)
   if (orgPickedFromMatch) {
     const orgName = orgPickedFromMatch[1].trim()
     const locationText = orgPickedFromMatch[2].trim()

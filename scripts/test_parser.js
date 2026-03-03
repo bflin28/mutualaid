@@ -265,6 +265,53 @@ console.log('\n── classifyMessage ──')
   assert('pickup-dropoff: drop = Urban Canopy', result.dropOffLocation, 'Urban Canopy')
 }
 
+// Test: day word "today" between verb and "from"
+{
+  const result = classifyMessage("SWC picked up today from SL Mariano's:\n5 boxes frozen meats")
+  assert('day-today: rescue = Mariano\'s SL', result.rescueLocation, "Mariano's South Loop")
+  assert('day-today: class = explicit_rescue', result.classification, 'explicit_rescue')
+}
+
+// Test: "on Wednesday" between verb and "from"
+{
+  const result = classifyMessage('SWC picked up on Wednesday from Aldi Hodgkins:\n5 boxes snacks')
+  assert('day-wednesday: rescue = Aldi Hodgkins', result.rescueLocation, 'Aldi Hodgkins')
+  assert('day-wednesday: class = explicit_rescue', result.classification, 'explicit_rescue')
+}
+
+// Test: "took from" (not "took:" warehouse)
+{
+  const result = classifyMessage('SWC took from Aldi Hodgkins:\n2 boxes frozen chicken')
+  assert('took-from: rescue = Aldi Hodgkins', result.rescueLocation, 'Aldi Hodgkins')
+  assert('took-from: class = explicit_rescue', result.classification, 'explicit_rescue')
+}
+
+// Test: "on Tuesday" between verb and "from"
+{
+  const result = classifyMessage("SWC picked up on Tuesday from SL Mariano's:\n8 banana boxes lunch meats")
+  assert('day-tuesday: rescue = Mariano\'s SL', result.rescueLocation, "Mariano's South Loop")
+}
+
+// Test: "scooped today from"
+{
+  const result = classifyMessage("SWC scooped today from SL Mariano's:\n4 boxes breads")
+  assert('scooped-today: rescue = Mariano\'s SL', result.rescueLocation, "Mariano's South Loop")
+}
+
+// Test: "on Wednesday 7/2 from" (with date)
+{
+  const result = classifyMessage('SWC picked up on Wednesday 7/2 from Aldi Hodgkins\n4 Boxes Frozen Meat')
+  assert('day-date: rescue = Aldi Hodgkins', result.rescueLocation, 'Aldi Hodgkins')
+}
+
+// Test: "SWC took:" still warehouse distribution (not confused with "took from")
+{
+  const result = classifyMessage('SWC took:\n5 boxes produce')
+  assert('took-colon: rescue = Urban Canopy', result.rescueLocation, 'Urban Canopy')
+  assert('took-colon: drop = SWC', result.dropOffLocation, 'SWC')
+  assert('took-colon: class = warehouse_distribution', result.classification, 'warehouse_distribution')
+}
+
 // ── Integration tests (full pipeline) ──────────────────────────
 console.log('\n── processMessageText (integration) ──')
 
