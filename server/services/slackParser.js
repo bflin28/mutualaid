@@ -1090,3 +1090,13 @@ export function processMessageText(text) {
 
   return records
 }
+
+// ============================================================
+// Exports for testing (internal helpers)
+// ============================================================
+export {
+  normalize, normalizeUnit, convertWordQuantities,
+  isRetailBoxItem, cleanItemName, splitInlineItems,
+  stripApostrophes, matchDropOffLocationWithSpan, deduplicateItems,
+  CFSC_CATEGORIES, UNIT_PATTERN, COMPOUND_PATTERN, UNIT_WORDS,
+}
