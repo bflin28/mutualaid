@@ -56,15 +56,21 @@ const SLACK_CHANNELS = {
 
 // ── Matching Logic ─────────────────────────────────────────
 
+// Map event names to the rescue_location_name that should match
+const EVENT_NAME_OVERRIDES = {
+  'keystone food delivery': 'nws',
+}
+
 function matchEventToLogs(event, logsForDay) {
   const eventName = event.name.toLowerCase().trim()
+  const matchName = EVENT_NAME_OVERRIDES[eventName] || eventName
   return logsForDay.filter(log => {
     const logLoc = (log.rescue_location_name || '').toLowerCase().trim()
     if (!logLoc) return false
     // Exact match
-    if (logLoc === eventName) return true
+    if (logLoc === matchName) return true
     // Contained match (handles "Aldi Belmont" matching event "Aldi Belmont")
-    if (logLoc.includes(eventName) || eventName.includes(logLoc)) return true
+    if (logLoc.includes(matchName) || matchName.includes(logLoc)) return true
     return false
   })
 }
