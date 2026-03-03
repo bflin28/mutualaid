@@ -265,7 +265,7 @@ export function estimateWeight(quantity, unit, category, itemName) {
       if (itemName && isRetailBoxItem(itemName)) return r(quantity * 1.5)
       return r(quantity * caseAvg)
     case 'pallets':
-      return r(quantity * caseAvg * 40)
+      return r(quantity * caseAvg * 60)
     case 'trays':
     case 'flats':
       return r(quantity * caseAvg * 0.7)
