@@ -312,6 +312,12 @@ console.log('\n── classifyMessage ──')
   assert('took-colon: class = warehouse_distribution', result.classification, 'warehouse_distribution')
 }
 
+// Test: "Aldi n. Kostner" alias resolves to Aldi Kostner
+{
+  const result = classifyMessage('Picked up at Aldi n. Kostner\n\nApproximately 25 oranges')
+  assert('aldi-n-kostner: rescue = Aldi Kostner', result.rescueLocation, 'Aldi Kostner')
+}
+
 // ── Integration tests (full pipeline) ──────────────────────────
 console.log('\n── processMessageText (integration) ──')
 

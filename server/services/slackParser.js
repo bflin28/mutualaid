@@ -496,7 +496,7 @@ const RESCUE_LOCATIONS = {
   'Aldi Cicero': ['aldi cicero', 'cicero aldi'],
   'Aldi Englewood': ['aldi englewood', 'englewood aldi', 'englewood aldis', '63rd aldi', 'aldi 63rd', 'aldi on 63rd'],
   'Aldi Belmont': ['aldi belmont', 'belmont aldi', 'aldi avondale', 'avondale aldi', 'belmont aldis', 'aldis belmont'],
-  'Aldi Kostner': ['aldi kostner', 'kostner aldi', 'aldis kostner', 'aldi on kostner', '1440 kostner', '1440 n kostner'],
+  'Aldi Kostner': ['aldi kostner', 'kostner aldi', 'aldis kostner', 'aldi on kostner', 'aldi n. kostner', 'aldi n kostner', '1440 kostner', '1440 n kostner'],
   "Mariano's": ['marianos', "mariano's", 'mariano'],
   "Mariano's South Loop": ['sl marianos', "mariano's sl", 'marianos sl', 'marianos south loop', 'south loop marianos', 's loop marianos', 's loop mariano'],
   'Whole Foods': ['whole foods', 'englewood whole foods', 'wf'],
