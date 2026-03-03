@@ -539,6 +539,7 @@ const RESCUE_LOCATIONS = {
   'West Suburbs Community Pantry': ['west suburbs community pantry', 'wesr suburbs community pantry', 'ws community pantry'],
   '827 S Pulaski': ['827 s pulaski', '817 s pulaski'],
   'Nourishing Hope': ['nourishing hope'],
+  'NWS': ['nws'],
 }
 
 const DROP_OFF_LOCATIONS = {

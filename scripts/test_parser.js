@@ -312,6 +312,17 @@ console.log('\n── classifyMessage ──')
   assert('took-colon: class = warehouse_distribution', result.classification, 'warehouse_distribution')
 }
 
+// Test: NWS recognized as rescue location
+{
+  const result = classifyMessage('NWS Dropoff:\n• Frozen Meat: 3 Boxes\n• Produce: 12 boxes')
+  assert('nws-dropoff: rescue = NWS', result.rescueLocation, 'NWS')
+}
+{
+  const result = classifyMessage('From NWS:\n5 boxes produce')
+  assert('nws-from: rescue = NWS', result.rescueLocation, 'NWS')
+  assert('nws-from: class = explicit_rescue', result.classification, 'explicit_rescue')
+}
+
 // Test: "Aldi n. Kostner" alias resolves to Aldi Kostner
 {
   const result = classifyMessage('Picked up at Aldi n. Kostner\n\nApproximately 25 oranges')
