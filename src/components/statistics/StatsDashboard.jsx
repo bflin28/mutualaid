@@ -291,7 +291,7 @@ export function StatsDashboard() {
       <div className="flex overflow-x-auto border-b border-gray-200 mb-6 -mx-1 px-1 scrollbar-hide">
         {[
           { id: 'overview', label: 'Overview', icon: Package },
-          { id: 'store', label: 'By Store', icon: Store },
+          { id: 'store', label: 'By Rescue Source', icon: Store },
           { id: 'dropoff', label: 'Drop-offs', icon: MapPin },
           { id: 'inventory', label: 'Inventory', icon: Warehouse },
         ].map(tab => (
