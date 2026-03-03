@@ -4,6 +4,7 @@ export function StatCard({ title, value, subtitle, color = 'green' }) {
     blue: 'bg-blue-50 border-blue-200 text-blue-700',
     purple: 'bg-purple-50 border-purple-200 text-purple-700',
     orange: 'bg-orange-50 border-orange-200 text-orange-700',
+    red: 'bg-red-50 border-red-200 text-red-700',
   }
 
   return (
