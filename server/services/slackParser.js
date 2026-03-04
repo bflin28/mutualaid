@@ -456,7 +456,6 @@ const TAKER_ORGS = [
   { name: 'Pilsen Food Pantry', patterns: ['pilsen food pantry', 'pilsen pantry', 'pfp'] },
   { name: 'Pilsen Free Store', patterns: ['pilsen free store', 'pilsen free'] },
   { name: 'Sweet Water Foundation', patterns: ['sweet water', 'sweetwater'] },
-  { name: 'New Hope', patterns: ['new hope'] },
   { name: 'Just Roots', patterns: ['just roots'] },
   { name: 'Northwestern Settlement', patterns: ['northwestern settlement'] },
   { name: 'NWMA', patterns: ['nwma', 'northwest mutual aid'] },
