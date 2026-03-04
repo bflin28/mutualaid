@@ -1,6 +1,7 @@
 import { useState, useEffect, useMemo } from 'react'
 import { RefreshCw, ChevronDown, ChevronRight, MapPin, Store, Package, ArrowUpDown, Warehouse } from 'lucide-react'
 import { StatCard } from './StatCard'
+import { fetchFoodLogs } from '../../lib/api'
 
 // Store groups — parent store that groups multiple locations
 const STORE_GROUPS = {
@@ -44,8 +45,7 @@ export function StatsDashboard() {
 
   useEffect(() => {
     setLoading(true)
-    fetch('/api/food-logs?limit=10000')
-      .then(r => r.json())
+    fetchFoodLogs({ limit: 10000 })
       .then(result => setData(Array.isArray(result) ? result : result.data || []))
       .catch(err => console.error('Failed to load food logs:', err))
       .finally(() => setLoading(false))

@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { RescueMap } from './RescueMap'
 import { LocationsPanel } from './LocationsPanel'
 import { useMapData } from './useMapData'
+import { fetchFoodLogs } from '../../lib/api'
 import { Table2 } from 'lucide-react'
 
 export function MapPage() {
@@ -13,8 +14,7 @@ export function MapPage() {
 
   useEffect(() => {
     setLoading(true)
-    fetch('/api/food-logs?limit=10000')
-      .then(r => r.json())
+    fetchFoodLogs({ limit: 10000 })
       .then(result => setData(Array.isArray(result) ? result : result.data || []))
       .catch(err => console.error('Failed to load parsed data:', err))
       .finally(() => setLoading(false))
