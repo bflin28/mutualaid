@@ -287,9 +287,10 @@ export function AdminPage() {
   useEffect(() => {
     if (!authenticated) return
     setLoading(true)
+    const adminHeaders = { headers: { 'x-admin-password': adminPassword } }
     Promise.all([
-      fetchEvents(),
-      fetchFoodLogs({ limit: 10000 }),
+      fetchEvents(adminHeaders),
+      fetchFoodLogs({ limit: 10000 }, adminHeaders),
     ])
       .then(([evts, logsResult]) => {
         setEvents(evts)
