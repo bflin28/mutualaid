@@ -540,6 +540,7 @@ const RESCUE_LOCATIONS = {
   '827 S Pulaski': ['827 s pulaski', '817 s pulaski'],
   'Nourishing Hope': ['nourishing hope'],
   'NWS': ['nws'],
+  'New Hope': ['new hope'],
 }
 
 const DROP_OFF_LOCATIONS = {
