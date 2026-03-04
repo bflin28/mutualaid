@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
-import { FileText, BarChart3, UserPlus, Map, Menu, X } from 'lucide-react'
+import { FileText, BarChart3, UserPlus, Map, Menu, X, LogOut } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 const NAV_ITEMS = [
   { to: '/', icon: BarChart3, label: 'Statistics' },
@@ -11,6 +12,7 @@ const NAV_ITEMS = [
 
 export function MobileNav() {
   const [open, setOpen] = useState(false)
+  const { user, signOut } = useAuth()
 
   return (
     <div className="md:hidden">
@@ -47,6 +49,16 @@ export function MobileNav() {
               <span className="font-medium">{label}</span>
             </NavLink>
           ))}
+
+          <button
+            onClick={() => { signOut(); setOpen(false) }}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-gray-500
+              hover:bg-gray-50 hover:text-gray-900 transition-colors"
+          >
+            <LogOut className="w-5 h-5" />
+            <span className="font-medium">Sign out</span>
+          </button>
+          <p className="text-xs text-gray-400 text-center pt-2 truncate">{user?.email}</p>
         </div>
       )}
     </div>

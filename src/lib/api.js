@@ -1,13 +1,19 @@
+import { supabase } from './supabase'
+
 const API_BASE = ''
-const API_KEY = import.meta.env.VITE_API_KEY || ''
 
 async function request(path, options = {}) {
-  const headers = { 'Content-Type': 'application/json', ...options.headers }
-  if (API_KEY) headers['x-api-key'] = API_KEY
+  const { headers: optHeaders, ...rest } = options
+  const headers = { 'Content-Type': 'application/json', ...optHeaders }
+
+  const { data: { session } } = await supabase.auth.getSession()
+  if (session?.access_token) {
+    headers['Authorization'] = `Bearer ${session.access_token}`
+  }
 
   const res = await fetch(`${API_BASE}${path}`, {
+    ...rest,
     headers,
-    ...options,
   })
   if (!res.ok) {
     const body = await res.json().catch(() => ({}))
@@ -47,3 +53,30 @@ export const fetchSignups = (params = {}) => {
   const qs = new URLSearchParams(params).toString()
   return request(`/api/signups${qs ? `?${qs}` : ''}`)
 }
+
+// Admin — allowed emails (requires admin password)
+export const verifyAdminPassword = (password) =>
+  request('/api/allowed-emails/verify', { method: 'POST', body: JSON.stringify({ password }) })
+
+export const fetchAllowedEmails = (adminPassword) =>
+  request('/api/allowed-emails', { headers: { 'x-admin-password': adminPassword } })
+
+export const inviteUser = (email, adminPassword) =>
+  request('/api/allowed-emails', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+    headers: { 'x-admin-password': adminPassword },
+  })
+
+export const resendInvite = (email, adminPassword) =>
+  request('/api/allowed-emails/resend', {
+    method: 'POST',
+    body: JSON.stringify({ email }),
+    headers: { 'x-admin-password': adminPassword },
+  })
+
+export const deleteAllowedEmail = (id, adminPassword) =>
+  request(`/api/allowed-emails/${id}`, {
+    method: 'DELETE',
+    headers: { 'x-admin-password': adminPassword },
+  })

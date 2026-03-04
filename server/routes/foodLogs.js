@@ -1,13 +1,12 @@
 import { Router } from 'express'
 import { loadCategories, addCategoryAndWeight } from '../services/categoryDetector.js'
 import { loadLocations, resolveLocation } from '../services/locationResolver.js'
-import { requireApiKey } from '../middleware/apiKey.js'
 
 export default function foodLogRoutes(supabase) {
   const router = Router()
 
   // POST /api/food-logs — create a food log entry
-  router.post('/', requireApiKey, async (req, res) => {
+  router.post('/', async (req, res) => {
     try {
       const {
         rescue_location,
@@ -139,7 +138,7 @@ export default function foodLogRoutes(supabase) {
   })
 
   // POST /api/food-logs/parse — parse pasted text into structured items
-  router.post('/parse', requireApiKey, async (req, res) => {
+  router.post('/parse', async (req, res) => {
     try {
       const { text } = req.body
       if (!text) return res.status(400).json({ error: 'text is required' })
