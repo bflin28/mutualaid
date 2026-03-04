@@ -1,6 +1,7 @@
 import { Router } from 'express'
 import { loadCategories, addCategoryAndWeight } from '../services/categoryDetector.js'
 import { loadLocations, resolveLocation } from '../services/locationResolver.js'
+import { processMessageText } from '../services/slackParser.js'
 
 export default function foodLogRoutes(supabase) {
   const router = Router()
@@ -194,6 +195,97 @@ export default function foodLogRoutes(supabase) {
     } catch (err) {
       console.error('POST /api/food-logs/parse error:', err.message)
       res.status(500).json({ error: 'Failed to parse text' })
+    }
+  })
+
+  // POST /api/food-logs/reparse — re-parse slack messages from the last N days
+  // Requires admin password (via x-admin-password header through requireAuth)
+  router.post('/reparse', async (req, res) => {
+    // Check admin password
+    const adminPw = process.env.ADMIN_PASSWORD
+    const provided = req.headers['x-admin-password']
+    if (!adminPw || provided !== adminPw) {
+      return res.status(401).json({ error: 'Admin password required' })
+    }
+
+    try {
+      const { days = 7 } = req.body
+      const since = new Date()
+      since.setDate(since.getDate() - days)
+
+      // Fetch monitored channel IDs
+      const channelCsv = process.env.SLACK_WAREHOUSE_LOG_CHANNEL_IDS
+        || process.env.SLACK_WAREHOUSE_LOG_CHANNEL_ID
+        || process.env.WAREHOUSE_LOG_CHANNEL_ID
+        || ''
+      const channels = channelCsv.split(',').map(s => s.trim()).filter(Boolean)
+      if (channels.length === 0) {
+        return res.status(400).json({ error: 'No monitored channels configured' })
+      }
+
+      // Channel → default drop-off
+      const CHANNEL_DROP_OFF = {
+        'C026VATTHDE': 'Urban Canopy',
+        'C031JSTNV6H': 'Keystone',
+      }
+
+      // Fetch raw slack messages
+      const { data: messages, error: msgError } = await supabase
+        .from('slack_messages')
+        .select('*')
+        .in('slack_channel', channels)
+        .gte('created_at', since.toISOString())
+        .order('created_at', { ascending: false })
+
+      if (msgError) throw msgError
+
+      const locations = await loadLocations(supabase)
+      let updated = 0
+      let skipped = 0
+
+      for (const msg of messages) {
+        if (!msg.raw_text?.trim()) { skipped++; continue }
+
+        const records = processMessageText(msg.raw_text)
+        if (records.length === 0) { skipped++; continue }
+
+        // Delete existing food_log for this slack_ts
+        await supabase
+          .from('food_logs')
+          .delete()
+          .eq('slack_ts', msg.slack_ts)
+
+        // Re-insert
+        for (const record of records) {
+          const dbLocation = resolveLocation(record.rescue_location_name, locations)
+          const dropOff = record.drop_off_location_name || CHANNEL_DROP_OFF[msg.slack_channel] || null
+
+          await supabase
+            .from('food_logs')
+            .insert({
+              rescue_location_id: dbLocation?.id || null,
+              rescue_location_name: dbLocation?.name || record.rescue_location_name,
+              drop_off_location_name: dropOff,
+              rescued_at: new Date(parseFloat(msg.slack_ts) * 1000).toISOString(),
+              rescued_by: msg.slack_user || null,
+              items: record.items,
+              total_estimated_lbs: record.total_estimated_lbs,
+              record_type: record.record_type || 'rescue',
+              classification: record.classification || null,
+              source: 'slack',
+              slack_ts: msg.slack_ts,
+              slack_channel: msg.slack_channel,
+              raw_text: msg.raw_text,
+            })
+
+          updated++
+        }
+      }
+
+      res.json({ ok: true, messages: messages.length, updated, skipped })
+    } catch (err) {
+      console.error('POST /api/food-logs/reparse error:', err.message)
+      res.status(500).json({ error: err.message })
     }
   })
 

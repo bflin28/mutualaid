@@ -742,7 +742,7 @@ export function classifyMessage(text) {
     /^rescue\s+from\s+([^.\n,:]+)/im,
     /(?:dropped(?:\s+off)?|delivery)\s+(?:from)\s*([^.\n,:]+)/i,
     /(?:from|dropped from)\s+(aldi[^.\n,:]*)/i,
-    /^from\s+(\w[\w\s,'.-]+?)(?:\s*[:\n,]|$)/im,
+    /^from\s+(\w[\w\s,'.-]+?)(?:\s+\d{1,2}\/\d{1,2}(?:\/\d{2,4})?)?\s*(?:[:\n,]|$)/im,
   ]
   for (const pat of rescuePatterns) {
     const m = text.match(pat)
