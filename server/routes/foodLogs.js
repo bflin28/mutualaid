@@ -286,5 +286,148 @@ export default function foodLogRoutes(supabase) {
     }
   })
 
+  // POST /api/food-logs/backfill — fetch messages from Slack API and save to DB
+  // Use when the bot was offline and missed messages
+  router.post('/backfill', async (req, res) => {
+    // Check admin password
+    const adminPw = process.env.ADMIN_PASSWORD
+    const provided = req.headers['x-admin-password']
+    if (!adminPw || provided !== adminPw) {
+      return res.status(401).json({ error: 'Admin password required' })
+    }
+
+    const botToken = process.env.SLACK_BOT_TOKEN
+    if (!botToken) {
+      return res.status(500).json({ error: 'SLACK_BOT_TOKEN not configured' })
+    }
+
+    try {
+      const { days = 7 } = req.body
+      const oldest = String(Math.floor((Date.now() - days * 86400000) / 1000))
+
+      const channelCsv = process.env.SLACK_WAREHOUSE_LOG_CHANNEL_IDS
+        || process.env.SLACK_WAREHOUSE_LOG_CHANNEL_ID
+        || process.env.WAREHOUSE_LOG_CHANNEL_ID
+        || 'C026VATTHDE,C031JSTNV6H'
+      const channels = channelCsv.split(',').map(s => s.trim()).filter(Boolean)
+
+      const CHANNEL_DROP_OFF = {
+        'C026VATTHDE': 'Urban Canopy',
+        'C031JSTNV6H': 'Keystone',
+      }
+
+      const locations = await loadLocations(supabase)
+      let totalFetched = 0
+      let totalSaved = 0
+      let totalParsed = 0
+
+      for (const channel of channels) {
+        // Fetch from Slack conversations.history API
+        let cursor = undefined
+        let hasMore = true
+
+        while (hasMore) {
+          const params = new URLSearchParams({
+            channel,
+            oldest,
+            limit: '200',
+          })
+          if (cursor) params.set('cursor', cursor)
+
+          const resp = await fetch(`https://slack.com/api/conversations.history?${params}`, {
+            headers: { 'Authorization': `Bearer ${botToken}` },
+          })
+          const result = await resp.json()
+
+          if (!result.ok) {
+            console.error(`Slack API error for ${channel}:`, result.error)
+            break
+          }
+
+          const messages = result.messages || []
+          totalFetched += messages.length
+
+          for (const msg of messages) {
+            // Skip bot messages and subtypes
+            if (msg.bot_id || msg.subtype) continue
+            if (!msg.text?.trim()) continue
+
+            // Upsert into slack_messages
+            const { error: upsertErr } = await supabase
+              .from('slack_messages')
+              .upsert({
+                slack_ts: msg.ts,
+                slack_channel: channel,
+                slack_user: msg.user || null,
+                subtype: msg.subtype || null,
+                thread_ts: msg.thread_ts || null,
+                raw_text: msg.text,
+                raw_json: msg,
+              }, {
+                onConflict: 'slack_ts,slack_channel',
+              })
+
+            if (upsertErr) {
+              console.error('Upsert error:', upsertErr.message)
+              continue
+            }
+            totalSaved++
+
+            // Check if food_log already exists for this message
+            const { data: existing } = await supabase
+              .from('food_logs')
+              .select('id')
+              .eq('slack_ts', msg.ts)
+              .maybeSingle()
+
+            if (existing) continue
+
+            // Parse and create food log
+            const records = processMessageText(msg.text)
+            if (records.length === 0) continue
+
+            for (const record of records) {
+              const dbLocation = resolveLocation(record.rescue_location_name, locations)
+              const dropOff = record.drop_off_location_name || CHANNEL_DROP_OFF[channel] || null
+
+              const { error: insertErr } = await supabase
+                .from('food_logs')
+                .insert({
+                  rescue_location_id: dbLocation?.id || null,
+                  rescue_location_name: dbLocation?.name || record.rescue_location_name,
+                  drop_off_location_name: dropOff,
+                  rescued_at: new Date(parseFloat(msg.ts) * 1000).toISOString(),
+                  rescued_by: msg.user || null,
+                  items: record.items,
+                  total_estimated_lbs: record.total_estimated_lbs,
+                  record_type: record.record_type || 'rescue',
+                  classification: record.classification || null,
+                  source: 'slack',
+                  slack_ts: msg.ts,
+                  slack_channel: channel,
+                  raw_text: msg.text,
+                })
+
+              if (insertErr) {
+                console.error('Insert food_log error:', insertErr.message)
+              } else {
+                totalParsed++
+              }
+            }
+          }
+
+          // Check for pagination
+          cursor = result.response_metadata?.next_cursor
+          hasMore = !!cursor
+        }
+      }
+
+      res.json({ ok: true, fetched: totalFetched, saved: totalSaved, parsed: totalParsed })
+    } catch (err) {
+      console.error('POST /api/food-logs/backfill error:', err.message)
+      res.status(500).json({ error: err.message })
+    }
+  })
+
   return router
 }
