@@ -213,15 +213,12 @@ export default function foodLogRoutes(supabase) {
       const since = new Date()
       since.setDate(since.getDate() - days)
 
-      // Fetch monitored channel IDs
+      // Fetch monitored channel IDs (fallback to known channels)
       const channelCsv = process.env.SLACK_WAREHOUSE_LOG_CHANNEL_IDS
         || process.env.SLACK_WAREHOUSE_LOG_CHANNEL_ID
         || process.env.WAREHOUSE_LOG_CHANNEL_ID
-        || ''
+        || 'C026VATTHDE,C031JSTNV6H'
       const channels = channelCsv.split(',').map(s => s.trim()).filter(Boolean)
-      if (channels.length === 0) {
-        return res.status(400).json({ error: 'No monitored channels configured' })
-      }
 
       // Channel → default drop-off
       const CHANNEL_DROP_OFF = {
