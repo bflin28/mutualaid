@@ -1,5 +1,4 @@
 import { Router } from 'express'
-import { requireApiKey } from '../middleware/apiKey.js'
 
 export default function eventRoutes(supabase) {
   const router = Router()
@@ -48,7 +47,7 @@ export default function eventRoutes(supabase) {
   })
 
   // POST /api/events — create a pickup event
-  router.post('/', requireApiKey, async (req, res) => {
+  router.post('/', async (req, res) => {
     try {
       const {
         name,

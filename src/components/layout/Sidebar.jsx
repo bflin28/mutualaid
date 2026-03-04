@@ -1,5 +1,6 @@
 import { NavLink } from 'react-router-dom'
-import { FileText, BarChart3, UserPlus, Map } from 'lucide-react'
+import { FileText, BarChart3, UserPlus, Map, LogOut } from 'lucide-react'
+import { useAuth } from '../../contexts/AuthContext'
 
 const NAV_ITEMS = [
   { to: '/', icon: BarChart3, label: 'Statistics' },
@@ -9,6 +10,8 @@ const NAV_ITEMS = [
 ]
 
 export function Sidebar() {
+  const { user, signOut } = useAuth()
+
   return (
     <aside className="hidden md:flex w-64 bg-white border-r border-gray-200 flex-col">
       <div className="p-6 border-b border-gray-200">
@@ -42,7 +45,18 @@ export function Sidebar() {
       </nav>
 
       <div className="p-4 border-t border-gray-200">
-        <p className="text-xs text-gray-400 text-center">CFSC Mutual Aid</p>
+        <div className="flex items-center justify-between">
+          <p className="text-xs text-gray-500 truncate mr-2" title={user?.email}>
+            {user?.email}
+          </p>
+          <button
+            onClick={signOut}
+            className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-600 transition-colors shrink-0"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            Sign out
+          </button>
+        </div>
       </div>
     </aside>
   )

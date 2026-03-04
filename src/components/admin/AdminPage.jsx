@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react'
-import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Clock, MapPin, Package } from 'lucide-react'
-import { fetchEvents, fetchFoodLogs } from '../../lib/api'
+import { ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Clock, MapPin, Package, Trash2, UserPlus, RotateCw } from 'lucide-react'
+import { fetchEvents, fetchFoodLogs, fetchAllowedEmails, inviteUser, resendInvite, deleteAllowedEmail, verifyAdminPassword } from '../../lib/api'
 import { DAYS_OF_WEEK } from '../../lib/constants'
 import { StatCard } from '../statistics/StatCard'
+import { toast } from 'sonner'
 
 // ── Utilities ──────────────────────────────────────────────
 
@@ -240,13 +241,51 @@ function UnscheduledLogs({ logs }) {
 // ── Main Component ─────────────────────────────────────────
 
 export function AdminPage() {
+  // Admin password gate
+  const [adminPassword, setAdminPassword] = useState(() => sessionStorage.getItem('adminPw') || '')
+  const [authenticated, setAuthenticated] = useState(false)
+  const [pwInput, setPwInput] = useState('')
+  const [pwLoading, setPwLoading] = useState(false)
+
   const [events, setEvents] = useState([])
   const [foodLogs, setFoodLogs] = useState([])
   const [loading, setLoading] = useState(true)
   const [weekOffset, setWeekOffset] = useState(0)
 
-  // Fetch data
+  // Allowed emails state
+  const [allowedEmails, setAllowedEmails] = useState([])
+  const [newEmail, setNewEmail] = useState('')
+  const [userLoading, setUserLoading] = useState(false)
+
+  // Verify stored admin password on mount
   useEffect(() => {
+    if (adminPassword) {
+      verifyAdminPassword(adminPassword)
+        .then(() => setAuthenticated(true))
+        .catch(() => {
+          sessionStorage.removeItem('adminPw')
+          setAdminPassword('')
+        })
+    }
+  }, [])
+
+  const handleAdminLogin = async (e) => {
+    e.preventDefault()
+    setPwLoading(true)
+    try {
+      await verifyAdminPassword(pwInput)
+      setAdminPassword(pwInput)
+      sessionStorage.setItem('adminPw', pwInput)
+      setAuthenticated(true)
+    } catch {
+      toast.error('Invalid admin password')
+    }
+    setPwLoading(false)
+  }
+
+  // Fetch data once authenticated
+  useEffect(() => {
+    if (!authenticated) return
     setLoading(true)
     Promise.all([
       fetchEvents(),
@@ -254,13 +293,50 @@ export function AdminPage() {
     ])
       .then(([evts, logsResult]) => {
         setEvents(evts)
-        // Unwrap { data, total } response and filter to rescue records
         const logs = Array.isArray(logsResult) ? logsResult : logsResult.data || []
         setFoodLogs(logs.filter(l => l.record_type !== 'inventory'))
       })
       .catch(err => console.error('Admin data fetch failed:', err))
       .finally(() => setLoading(false))
-  }, [])
+
+    fetchAllowedEmails(adminPassword)
+      .then(setAllowedEmails)
+      .catch(err => console.error('Failed to load allowed emails:', err))
+  }, [authenticated])
+
+  const handleInviteUser = async (e) => {
+    e.preventDefault()
+    if (!newEmail.trim()) return
+    setUserLoading(true)
+    try {
+      const added = await inviteUser(newEmail.trim(), adminPassword)
+      setAllowedEmails(prev => [added, ...prev])
+      setNewEmail('')
+      toast.success(`Invite sent to ${added.email}`)
+    } catch (err) {
+      toast.error(err.message)
+    }
+    setUserLoading(false)
+  }
+
+  const handleResendInvite = async (email) => {
+    try {
+      await resendInvite(email, adminPassword)
+      toast.success(`Invite resent to ${email}`)
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
+
+  const handleDeleteEmail = async (id, email) => {
+    try {
+      await deleteAllowedEmail(id, adminPassword)
+      setAllowedEmails(prev => prev.filter(e => e.id !== id))
+      toast.success(`Removed ${email}`)
+    } catch (err) {
+      toast.error(err.message)
+    }
+  }
 
   // Week navigation
   const today = new Date()
@@ -329,6 +405,45 @@ export function AdminPage() {
       summary: { totalScheduled, totalLogged, totalMissing: totalScheduled - totalLogged, coveragePct, totalLbs },
     }
   }, [events, foodLogs, week.dates])
+
+  // Admin password gate
+  if (!authenticated) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+        <div className="w-full max-w-sm">
+          <div className="text-center mb-8">
+            <img src="/favicon.png" alt="CFSC" className="w-12 h-12 mx-auto mb-3" />
+            <h1 className="text-xl font-semibold text-gray-900">Admin Access</h1>
+            <p className="text-sm text-gray-500 mt-1">Enter the admin password to continue</p>
+          </div>
+          <form
+            onSubmit={handleAdminLogin}
+            className="bg-white border border-gray-200 rounded-lg p-6 space-y-4 shadow-sm"
+          >
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">Admin Password</label>
+              <input
+                type="password"
+                required
+                value={pwInput}
+                onChange={(e) => setPwInput(e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm
+                  focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+            <button
+              type="submit"
+              disabled={pwLoading}
+              className="w-full py-2.5 bg-green-600 text-white font-medium rounded-md
+                hover:bg-green-700 disabled:opacity-50 transition-colors text-sm"
+            >
+              {pwLoading ? 'Verifying...' : 'Continue'}
+            </button>
+          </form>
+        </div>
+      </div>
+    )
+  }
 
   if (loading) {
     return (
@@ -483,6 +598,63 @@ export function AdminPage() {
             </div>
           )
         })}
+      </div>
+
+      {/* Manage Access section */}
+      <div className="mt-10 border-t border-gray-200 pt-8">
+        <h3 className="text-lg font-semibold text-gray-900 mb-1">Manage Access</h3>
+        <p className="text-sm text-gray-500 mb-4">
+          Invite users by email. They'll receive a link to set their own password.
+        </p>
+
+        <form onSubmit={handleInviteUser} className="flex flex-col sm:flex-row gap-2 mb-4">
+          <input
+            type="email"
+            required
+            value={newEmail}
+            onChange={(e) => setNewEmail(e.target.value)}
+            placeholder="email@example.com"
+            className="flex-1 px-3 py-2 border border-gray-300 rounded-md text-sm
+              focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+          />
+          <button
+            type="submit"
+            disabled={userLoading}
+            className="inline-flex items-center justify-center gap-1.5 px-4 py-2 bg-green-600 text-white text-sm font-medium
+              rounded-md hover:bg-green-700 disabled:opacity-50 transition-colors"
+          >
+            <UserPlus className="w-4 h-4" />
+            Send Invite
+          </button>
+        </form>
+
+        {allowedEmails.length === 0 ? (
+          <p className="text-sm text-gray-400">No users yet.</p>
+        ) : (
+          <div className="bg-white border border-gray-200 rounded-lg divide-y divide-gray-100">
+            {allowedEmails.map(entry => (
+              <div key={entry.id} className="flex items-center justify-between px-4 py-2.5">
+                <span className="text-sm text-gray-800">{entry.email}</span>
+                <div className="flex items-center gap-1">
+                  <button
+                    onClick={() => handleResendInvite(entry.email)}
+                    className="p-1.5 text-gray-400 hover:text-green-600 hover:bg-green-50 rounded transition-colors"
+                    title="Resend invite"
+                  >
+                    <RotateCw className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => handleDeleteEmail(entry.id, entry.email)}
+                    className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded transition-colors"
+                    title="Remove"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   )

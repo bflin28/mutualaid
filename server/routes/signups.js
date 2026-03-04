@@ -1,11 +1,10 @@
 import { Router } from 'express'
-import { requireApiKey } from '../middleware/apiKey.js'
 
 export default function signupRoutes(supabase) {
   const router = Router()
 
   // POST /api/signups — volunteer signup
-  router.post('/', requireApiKey, async (req, res) => {
+  router.post('/', async (req, res) => {
     try {
       const {
         event_id,
@@ -100,7 +99,7 @@ export default function signupRoutes(supabase) {
   })
 
   // GET /api/signups/admin — list signups with full details (requires API key)
-  router.get('/admin', requireApiKey, async (req, res) => {
+  router.get('/admin', async (req, res) => {
     try {
       const { event_id, status } = req.query
 

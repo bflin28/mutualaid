@@ -11,6 +11,8 @@ import locationRoutes from './routes/locations.js'
 import foodLogRoutes from './routes/foodLogs.js'
 import eventRoutes from './routes/events.js'
 import signupRoutes from './routes/signups.js'
+import allowedEmailRoutes from './routes/allowedEmails.js'
+import { requireAuth } from './middleware/requireAuth.js'
 import { startSlackSocket } from './services/slackSocket.js'
 
 const app = express()
@@ -46,7 +48,11 @@ app.get('/api/health', (_req, res) => res.json({ ok: true }))
 
 // Route modules
 if (supabase) {
-  // Public read routes (no API key needed)
+  // Admin routes use their own password auth (not JWT)
+  app.use('/api/allowed-emails', allowedEmailRoutes(supabase))
+
+  // All other API routes require JWT auth
+  app.use('/api', requireAuth)
   app.use('/api/locations', locationRoutes(supabase))
   app.use('/api/food-logs', foodLogRoutes(supabase))
   app.use('/api/events', eventRoutes(supabase))
