@@ -30,17 +30,17 @@ export const fetchLocations = (type) =>
 export const createFoodLog = (data) =>
   request('/api/food-logs', { method: 'POST', body: JSON.stringify(data) })
 
-export const fetchFoodLogs = (params = {}) => {
+export const fetchFoodLogs = (params = {}, options = {}) => {
   const qs = new URLSearchParams(params).toString()
-  return request(`/api/food-logs${qs ? `?${qs}` : ''}`)
+  return request(`/api/food-logs${qs ? `?${qs}` : ''}`, options)
 }
 
 export const parseFoodText = (text) =>
   request('/api/food-logs/parse', { method: 'POST', body: JSON.stringify({ text }) })
 
 // Events
-export const fetchEvents = () =>
-  request('/api/events')
+export const fetchEvents = (options = {}) =>
+  request('/api/events', options)
 
 export const createEvent = (data) =>
   request('/api/events', { method: 'POST', body: JSON.stringify(data) })

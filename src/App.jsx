@@ -11,13 +11,23 @@ import { LoginPage } from './components/auth/LoginPage'
 import { ResetPasswordPage } from './components/auth/ResetPasswordPage'
 
 export default function App() {
-  const { user, loading } = useAuth()
+  const { user, loading, needsPasswordReset } = useAuth()
 
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-gray-400">Loading...</div>
       </div>
+    )
+  }
+
+  // User arrived via invite/reset link — force password setup
+  if (needsPasswordReset) {
+    return (
+      <BrowserRouter>
+        <Toaster position="top-right" />
+        <ResetPasswordPage />
+      </BrowserRouter>
     )
   }
 

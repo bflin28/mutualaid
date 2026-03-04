@@ -4,7 +4,7 @@ import { useAuth } from '../../contexts/AuthContext'
 import { toast } from 'sonner'
 
 export function ResetPasswordPage() {
-  const { updatePassword } = useAuth()
+  const { updatePassword, clearPasswordReset } = useAuth()
   const navigate = useNavigate()
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -26,6 +26,7 @@ export function ResetPasswordPage() {
       toast.error(error.message)
     } else {
       toast.success('Password updated successfully!')
+      clearPasswordReset()
       navigate('/')
     }
     setLoading(false)

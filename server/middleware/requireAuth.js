@@ -7,6 +7,13 @@ const JWT_SECRET = process.env.SUPABASE_JWT_SECRET
  * If SUPABASE_JWT_SECRET is not set, all requests pass through (dev mode).
  */
 export function requireAuth(req, res, next) {
+  // Allow admin password as alternative auth (for admin page data fetches)
+  const adminPw = process.env.ADMIN_PASSWORD
+  const providedAdminPw = req.headers['x-admin-password']
+  if (adminPw && providedAdminPw === adminPw) {
+    return next()
+  }
+
   if (!JWT_SECRET) {
     return next()
   }
